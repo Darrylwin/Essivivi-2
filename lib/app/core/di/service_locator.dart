@@ -2,12 +2,13 @@ import 'package:get_it/get_it.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// TODO: Import your features here when created
-// import 'package:your_app/features/auth/data/datasources/auth_remote_datasource.dart';
-// import 'package:your_app/features/auth/data/repositories/auth_repository_impl.dart';
-// import 'package:your_app/features/auth/domain/repositories/auth_repository.dart';
-// import 'package:your_app/features/auth/domain/usecases/login_usecase.dart';
-// import 'package:your_app/features/auth/presentation/bloc/auth_bloc.dart';
+import '../../features/auth/data/datasources/auth_remote_datasource.dart';
+import '../../features/auth/data/repositories/auth_repository_impl.dart';
+import '../../features/auth/domain/repositories/auth_repository.dart';
+import '../../features/auth/domain/usecases/login_usecase.dart';
+import '../../features/auth/domain/usecases/logout_usecase.dart';
+import '../../features/auth/domain/usecases/get_current_user_usecase.dart';
+import '../../features/auth/presentation/bloc/auth_bloc.dart';
 
 final sl = GetIt.instance;
 
@@ -16,7 +17,7 @@ Future<void> initDependencies() async {
   // =====================================================
   // Core
   // =====================================================
-  
+
   // Dio Client
   sl.registerLazySingleton<Dio>(() {
     final dio = Dio(
@@ -45,11 +46,11 @@ Future<void> initDependencies() async {
         onRequest: (options, handler) async {
           final prefs = sl<SharedPreferences>();
           final token = prefs.getString('auth_token');
-          
+
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
           }
-          
+
           return handler.next(options);
         },
         onError: (error, handler) async {
@@ -71,41 +72,44 @@ Future<void> initDependencies() async {
   final sharedPreferences = await SharedPreferences.getInstance();
   sl.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
 
-  // =====================================================
-  // Features - Auth
-  // =====================================================
-  
-  // TODO: Uncomment when you create auth feature
-  
-  // Bloc
-  // sl.registerFactory(() => AuthBloc(
-  //   loginUseCase: sl(),
-  //   logoutUseCase: sl(),
-  // ));
+// =====================================================
+// Features - Auth
+// =====================================================
 
-  // Use Cases
-  // sl.registerLazySingleton(() => LoginUseCase(sl()));
-  // sl.registerLazySingleton(() => LogoutUseCase(sl()));
+// Bloc
+  sl.registerFactory(() => AuthBloc(
+        loginUseCase: sl(),
+        logoutUseCase: sl(),
+        getCurrentUserUseCase: sl(),
+      ));
 
-  // Repository
-  // sl.registerLazySingleton<AuthRepository>(
-  //   () => AuthRepositoryImpl(remoteDataSource: sl()),
-  // );
+// Use Cases
+  sl.registerLazySingleton(() => LoginUseCase(sl()));
+  sl.registerLazySingleton(() => LogoutUseCase(sl()));
+  sl.registerLazySingleton(() => GetCurrentUserUseCase(sl()));
 
-  // Data Source
-  // sl.registerLazySingleton<AuthRemoteDataSource>(
-  //   () => AuthRemoteDataSourceImpl(dio: sl()),
-  // );
+// Repository
+  sl.registerLazySingleton<AuthRepository>(
+    () => AuthRepositoryImpl(
+      remoteDataSource: sl(),
+      sharedPreferences: sl(),
+    ),
+  );
+
+// Data Source
+  sl.registerLazySingleton<AuthRemoteDataSource>(
+    () => AuthRemoteDataSourceImpl(dio: sl()),
+  );
 
   // =====================================================
   // Features - Order
   // =====================================================
-  
+
   // TODO: Add order dependencies
 
   // =====================================================
   // Features - Delivery
   // =====================================================
-  
+
   // TODO: Add delivery dependencies
 }
