@@ -27,8 +27,8 @@ urlpatterns = [
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     
-    # API v1 (on ajoutera les routes plus tard)
-    path('api/v1/', include('api.urls')),  # On créera ce fichier plus tard
+    # API v1
+    path('api/v1/', include('api.urls')),
 ]
 
 # Servir les fichiers media en développement
