@@ -6,4 +6,7 @@ urlpatterns = [
     
     # Module de gestion des utilisateurs
     path('', include('users.urls')),
+    
+    # Module de gestion des tournées
+    path('', include('tours.urls')),
 ]

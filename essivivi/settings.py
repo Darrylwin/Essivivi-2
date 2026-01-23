@@ -82,6 +82,16 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'tours': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'deliveries': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
     'root': {
         'handlers': ['console', 'file'],
@@ -106,6 +116,8 @@ INSTALLED_APPS = [
     # Local apps
     'authentication',
     'users',
+    'tours',
+    'deliveries',
 ]
 
 # Modèle d'utilisateur personnalisé
