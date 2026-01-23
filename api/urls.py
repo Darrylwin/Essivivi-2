@@ -18,4 +18,7 @@ urlpatterns = [
     
     # Module de suivi GPS
     path('', include('tracking.urls')),
+    
+    # Module dashboard et statistiques
+    path('', include('dashboard.urls')),
 ]
