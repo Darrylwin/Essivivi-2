@@ -15,4 +15,7 @@ urlpatterns = [
     
     # Module de gestion des commandes
     path('', include('orders.urls')),
+    
+    # Module de suivi GPS
+    path('', include('tracking.urls')),
 ]
