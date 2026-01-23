@@ -66,3 +66,9 @@ class ChangePasswordSerializer(serializers.Serializer):
 class UpdatePhotoSerializer(serializers.Serializer):
     """Serializer pour mettre à jour la photo de profil"""
     photo = serializers.ImageField()
+
+class MobileLoginSerializer(serializers.Serializer):
+    """Serializer pour la connexion mobile (Agent OU Client)"""
+    email = serializers.EmailField()
+    mot_de_passe = serializers.CharField(write_only=True)
+    use_otp = serializers.BooleanField(default=False, required=False)

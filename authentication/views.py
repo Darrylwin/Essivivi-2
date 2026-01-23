@@ -371,3 +371,152 @@ class UpdatePhotoView(APIView):
             {"error": "Impossible de mettre à jour la photo"},
             status=status.HTTP_400_BAD_REQUEST
         )
+    
+class MobileLoginView(APIView):
+    """
+    Connexion mobile unique pour Agent ET Client
+    Détecte automatiquement le type d'utilisateur
+    """
+    permission_classes = [AllowAny]
+    
+    @swagger_auto_schema(
+        request_body=MobileLoginSerializer,
+        responses={
+            200: openapi.Response(
+                description="Connexion réussie",
+                examples={
+                    "application/json": {
+                        "message": "Connexion réussie",
+                        "token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+                        "refresh": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+                        "user_type": "agent",  # ou "client"
+                        "user": {}
+                    }
+                }
+            ),
+            400: "Email ou mot de passe incorrect"
+        }
+    )
+    def post(self, request):
+        logger.info("Tentative de connexion mobile")
+        
+        serializer = MobileLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+        mot_de_passe = serializer.validated_data['mot_de_passe']
+        use_otp = serializer.validated_data.get('use_otp', False)
+        
+        logger.info(f"Connexion mobile pour : {email}")
+        
+        # ÉTAPE 1 : Détecter le type d'utilisateur
+        user = None
+        user_type = None
+        
+        # Chercher d'abord dans Agent
+        try:
+            user = Agent.objects.get(email=email)
+            user_type = 'agent'
+            logger.info(f"Utilisateur détecté : Agent {user.numero_identification}")
+        except Agent.DoesNotExist:
+            # Sinon chercher dans Client
+            try:
+                user = Client.objects.get(email=email)
+                user_type = 'client'
+                logger.info(f"Utilisateur détecté : Client {user.code_client}")
+            except Client.DoesNotExist:
+                logger.warning(f"Aucun utilisateur trouvé pour {email}")
+                return Response(
+                    {"error": "Email ou mot de passe incorrect"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # ÉTAPE 2 : Vérifier le statut
+        if user.statut == 'inactif':
+            logger.warning(f"Compte inactif : {email}")
+            return Response(
+                {"error": "Votre compte est inactif. Contactez l'administrateur."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # ÉTAPE 3 : Mode OTP demandé
+        if use_otp:
+            otp_code = create_otp(email, user_type)
+            email_sent = send_otp_email(email, otp_code)
+            
+            logger.info(f"OTP généré pour {user_type} {email} : {otp_code}")
+            
+            return Response({
+                "message": "Code OTP envoyé à votre email",
+                "email": email,
+                "user_type": user_type,
+                "requires_otp": True,
+                # À SUPPRIMER EN PRODUCTION
+                "otp": otp_code
+            }, status=status.HTTP_200_OK)
+        
+        # ÉTAPE 4 : Vérifier le mot de passe
+        # Pour Agent : mot_de_passe hashé
+        if user_type == 'agent':
+            if not check_password(mot_de_passe, user.mot_de_passe):
+                logger.warning(f"Mot de passe incorrect pour agent {email}")
+                return Response(
+                    {"error": "Email ou mot de passe incorrect"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Pour Client : pas de mot de passe stocké actuellement
+        # On peut soit ajouter un champ mot_de_passe au modèle Client
+        # Soit forcer l'utilisation d'OTP pour les clients
+        elif user_type == 'client':
+            # Pour l'instant, les clients doivent utiliser OTP
+            logger.info(f"Client {email} doit utiliser OTP")
+            otp_code = create_otp(email, user_type)
+            email_sent = send_otp_email(email, otp_code)
+            
+            return Response({
+                "message": "Les clients doivent utiliser OTP. Code envoyé à votre email.",
+                "email": email,
+                "user_type": user_type,
+                "requires_otp": True,
+                # À SUPPRIMER EN PRODUCTION
+                "otp": otp_code
+            }, status=status.HTTP_200_OK)
+        
+        # ÉTAPE 5 : Créer un admin temporaire pour le JWT
+        admin = Admin.objects.filter(email=email).first()
+        if not admin:
+            if user_type == 'agent':
+                admin = Admin.objects.create(
+                    email=email,
+                    nom=user.nom,
+                    prenom=user.prenom,
+                    statut='actif'
+                )
+            else:  # client
+                admin = Admin.objects.create(
+                    email=email,
+                    nom=user.nom_responsable,
+                    prenom='',
+                    statut='actif'
+                )
+            logger.info(f"Admin temporaire créé pour {email}")
+        
+        # ÉTAPE 6 : Générer le token JWT
+        refresh = RefreshToken.for_user(admin)
+        
+        # ÉTAPE 7 : Retourner les données selon le type
+        if user_type == 'agent':
+            user_data = AgentProfileSerializer(user).data
+        else:  # client
+            user_data = ClientProfileSerializer(user).data
+        
+        logger.info(f"Connexion mobile réussie pour {user_type} : {email}")
+        
+        return Response({
+            "message": "Connexion réussie",
+            "token": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user_type": user_type,  # ← Frontend utilise ça pour rediriger
+            "user": user_data
+        }, status=status.HTTP_200_OK)
