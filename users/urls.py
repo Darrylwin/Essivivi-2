@@ -28,4 +28,14 @@ urlpatterns = [
     path('admin/users/<int:pk>', AdminDetailView.as_view(), name='admin-detail'),
     
     # ===== AGENTS =====
-    path('admin/agents', AgentList
+    path('admin/agents', AgentListView.as_view(), name='agent-list'),
+    path('admin/agents/create', AgentCreateView.as_view(), name='agent-create'),
+    path('admin/agents/<int:pk>', AgentDetailView.as_view(), name='agent-detail'),
+    path('admin/agents/<int:pk>/status', AgentStatusView.as_view(), name='agent-status'),
+    
+    # ===== CLIENTS =====
+    path('clients', ClientListView.as_view(), name='client-list'),
+    path('clients/create', ClientCreateView.as_view(), name='client-create'),
+    path('clients/<int:pk>', ClientDetailView.as_view(), name='client-detail'),
+    path('clients/<int:pk>/status', ClientStatusView.as_view(), name='client-status'),
+]
