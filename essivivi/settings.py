@@ -105,6 +105,7 @@ INSTALLED_APPS = [
 
     # Local apps
     'authentication',
+    'users',
 ]
 
 # Modèle d'utilisateur personnalisé
