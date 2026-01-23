@@ -27,3 +27,5 @@ staticfiles/
 .idea/
 *.swp
 *.swo
+
+logs/*.log
