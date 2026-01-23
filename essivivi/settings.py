@@ -92,6 +92,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'orders': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
     'root': {
         'handlers': ['console', 'file'],
@@ -118,6 +123,7 @@ INSTALLED_APPS = [
     'users',
     'tours',
     'deliveries',
+    'orders',
 ]
 
 # Modèle d'utilisateur personnalisé

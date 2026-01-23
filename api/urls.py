@@ -12,4 +12,7 @@ urlpatterns = [
     
     # Module de gestion des livraisons
     path('', include('deliveries.urls')),
+    
+    # Module de gestion des commandes
+    path('', include('orders.urls')),
 ]
