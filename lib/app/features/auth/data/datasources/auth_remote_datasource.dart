@@ -27,9 +27,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }) async {
     try {
       final response = await dio.post(
-        '/auth/login',
+        '/login',
         data: {
-          'identifier': identifier, // Backend accepte email ou phone
+          'email': identifier, // Backend accepte email ou phone
           'password': password,
         },
       );
@@ -92,6 +92,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     try {
       // Optional: call backend logout endpoint if needed
       await dio.post('/auth/logout');
+      // TODO: Clean from local storage
     } catch (e) {
       // Log error but don't throw - local logout should still work
       print('Logout API error: $e');

@@ -26,9 +26,6 @@ class User extends Equatable {
   /// Check if user is agent
   bool get isAgent => role == UserRole.agent;
 
-  /// Check if user is admin
-  bool get isAdmin => role == UserRole.admin;
-
   /// Get role as string
   String get roleString {
     switch (role) {
@@ -36,8 +33,6 @@ class User extends Equatable {
         return 'client';
       case UserRole.agent:
         return 'agent';
-      case UserRole.admin:
-        return 'admin';
     }
   }
 
@@ -57,7 +52,6 @@ class User extends Equatable {
 enum UserRole {
   client,
   agent,
-  admin,
 }
 
 /// Helper to parse role from string
@@ -67,8 +61,6 @@ UserRole userRoleFromString(String role) {
       return UserRole.client;
     case 'agent':
       return UserRole.agent;
-    case 'admin':
-      return UserRole.admin;
     default:
       throw ArgumentError('Invalid role: $role');
   }

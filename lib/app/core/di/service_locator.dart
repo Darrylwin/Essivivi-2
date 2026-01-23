@@ -34,7 +34,7 @@ Future<void> initDependencies() async {
   sl.registerLazySingleton<Dio>(() {
     final dio = Dio(
       BaseOptions(
-        baseUrl: 'https://your-api.com/api', // TODO: Update with your API URL
+        baseUrl: 'http://127.0.0.1:8000/api', // TODO: Update with API URL
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
         headers: {

@@ -5,7 +5,7 @@ class AppConstants {
   // =====================================================
   // API Configuration
   // =====================================================
-  static const String baseUrl = 'https://your-api.com/api';
+  static const String baseUrl = 'http://127.0.0.1:8000/api';
 
   // API Endpoints
   static const String authEndpoint = '/auth';
@@ -29,7 +29,6 @@ class AppConstants {
   // =====================================================
   static const String roleClient = 'client';
   static const String roleAgent = 'agent';
-  static const String roleAdmin = 'admin';
 
   // =====================================================
   // GPS Configuration
