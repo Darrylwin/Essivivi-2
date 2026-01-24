@@ -33,12 +33,6 @@ export interface RefreshTokenRequest {
   refreshToken: string;
 }
 
-export interface UpdateUserRequest {
-  email?: string;
-  password?: string;
-  name?: string;
-}
-
 // ========== AUTH RESPONSES ==========
 export interface AuthResponse {
   message: string;
@@ -53,44 +47,9 @@ export interface RefreshTokenResponse {
   user?: User;
 }
 
-export interface CreateAdminResponse {
-  message: string;
-  user: User;
-  credentials: {
-    email: string;
-    password: string;
-  };
-}
-
 // ========== USER RESPONSES ==========
-export interface UsersListResponse {
-  users: User[];
-  metadata?: {
-    total: number;
-    page: number;
-    totalPages: number;
-    hasNext: boolean;
-  };
-}
-
 export interface UserResponse {
   user: User;
-}
-
-export interface UpdateUserResponse {
-  message: string;
-  user: User;
-}
-
-export interface DeleteUserResponse {
-  message: string;
-  deletedUser?: {
-    id: string;
-    name?: string;
-    email: string;
-    permissions: UserPermission;
-  };
-  deletedAt?: string;
 }
 
 // ========== AUTH STATE ==========

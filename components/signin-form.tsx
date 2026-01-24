@@ -7,13 +7,14 @@ import { Label } from "@/components/ui/label"
 
 export function SigninForm({
   className,
+  onSubmit,
   ...props
-}: React.ComponentProps<"div">) {
+}: React.ComponentProps<"div"> & { onSubmit?: (e: React.FormEvent<HTMLFormElement>) => void }) {
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-6 md:p-8">
+          <form onSubmit={onSubmit} className="p-6 md:p-8">
             <div className="flex flex-col gap-6">
               <div className="flex flex-col items-center text-center">
                 <h1 className="text-2xl font-bold">Connexion administrateur</h1>
@@ -24,12 +25,12 @@ export function SigninForm({
 
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="admin@example.com" required />
+                <Input id="email" name="email" type="email" placeholder="admin@example.com" required />
               </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="password">Mot de passe</Label>
-                <Input id="password" type="password" required />
+                <Input id="password" name="password" type="password" required />
               </div>
 
               <Button type="submit" className="w-full">

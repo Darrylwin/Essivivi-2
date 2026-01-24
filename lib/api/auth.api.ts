@@ -12,12 +12,9 @@ import { apiClient } from "./client";
 import type {
   LoginRequest,
   RefreshTokenRequest,
-  UpdateUserRequest,
   AuthResponse,
   RefreshTokenResponse,
-  UsersListResponse,
   UserResponse,
-  UpdateUserResponse,
 } from "../types";
 
 export class AuthApi {
@@ -25,31 +22,18 @@ export class AuthApi {
 
   /**
    * Connexion utilisateur
-   * POST /auth/login
+   * POST /api/login
    */
   async login(data: LoginRequest): Promise<AuthResponse> {
-    return this.client.post<AuthResponse>("/login", data);
+    return this.client.post<AuthResponse>("/api/login/", data);
   }
 
   /**
    * Rafraîchir le token d'accès
-   * POST /api/auth/refresh
+   * POST /api/login/refresh
    */
   async refreshToken(data: RefreshTokenRequest): Promise<RefreshTokenResponse> {
-    return this.client.post<RefreshTokenResponse>("/api/auth/refresh", data);
-  }
-
-  /**
-   * Liste tous les utilisateurs (Admin uniquement)
-   * GET /api/auth/users
-   * Requiert: Bearer token + admin
-   */
-  async getAllUsers(params?: {
-    page?: number;
-    limit?: number;
-    permissions?: string;
-  }): Promise<UsersListResponse> {
-    return this.client.get<UsersListResponse>("/api/auth/users", params);
+    return this.client.post<RefreshTokenResponse>("/api/login/refresh", data);
   }
 
   /**
@@ -59,21 +43,6 @@ export class AuthApi {
    */
   async getUserById(userId: string): Promise<UserResponse> {
     return this.client.get<UserResponse>(`/api/auth/users/${userId}`);
-  }
-
-  /**
-   * Mettre à jour un utilisateur (Admin uniquement)
-   * PUT /api/auth/users/:id
-   * Requiert: Bearer token + admin
-   */
-  async updateUser(
-    userId: string,
-    data: UpdateUserRequest
-  ): Promise<UpdateUserResponse> {
-    return this.client.put<UpdateUserResponse>(
-      `/api/auth/users/${userId}`,
-      data
-    );
   }
 }
 
