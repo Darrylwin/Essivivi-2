@@ -14,8 +14,7 @@ from .serializers import (
     LivraisonCreateSerializer, LivraisonListSerializer,
     LivraisonDetailSerializer
 )
-from .permissions import IsAgent, IsAgentOrAdmin, IsClientOrAdmin
-from users.permissions import IsAdmin
+from .permissions import IsAgent
 
 logger = logging.getLogger('deliveries')
 

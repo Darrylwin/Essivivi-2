@@ -1,23 +1,30 @@
 from rest_framework import serializers
 from django.utils import timezone
 from datetime import datetime
-from .models import Commande, Notification
+from .models import Commande, Notification, LigneCommande
 from authentication.models import Agent, Client
 import logging
 
 logger = logging.getLogger('orders')
 
 
+
+# Serializer pour créer une ligne de commande
+class LigneCommandeCreateSerializer(serializers.Serializer):
+    produit_id = serializers.IntegerField()
+    quantite = serializers.IntegerField(min_value=1)
+
 class CommandeCreateSerializer(serializers.ModelSerializer):
     """Serializer pour créer une commande"""
-    
+    lignes = LigneCommandeCreateSerializer(many=True)
+
     class Meta:
         model = Commande
         fields = [
-            'quantite_demandee', 'date_livraison_souhaitee',
-            'adresse_livraison', 'notes_client'
+            'date_livraison_souhaitee',
+            'adresse_livraison', 'notes_client', 'lignes'
         ]
-    
+
     def validate_date_livraison_souhaitee(self, value):
         """Vérifier que la date n'est pas dans le passé"""
         if value < timezone.now().date():
@@ -25,25 +32,37 @@ class CommandeCreateSerializer(serializers.ModelSerializer):
                 "La date de livraison ne peut pas être dans le passé"
             )
         return value
-    
+
     def create(self, validated_data):
-        """Création de la commande"""
+        """Création de la commande avec lignes de commande"""
         request = self.context.get('request')
-        
-        # Récupérer le client
         try:
             client = Client.objects.get(email=request.user.email)
         except Client.DoesNotExist:
             raise serializers.ValidationError("Client non trouvé")
-        
-        # Créer la commande
+
+        lignes_data = validated_data.pop('lignes', [])
         commande = Commande.objects.create(
             client=client,
             statut='en_attente',
             **validated_data
         )
-        
-        # Créer une notification pour les admins
+
+        from products.models import Produit
+        quantite_totale = 0
+        for ligne_data in lignes_data:
+            produit = Produit.objects.get(id=ligne_data['produit_id'])
+            LigneCommande.objects.create(
+                commande=commande,
+                produit=produit,
+                quantite=ligne_data['quantite'],
+                prix_unitaire=produit.prix_unitaire,
+                montant=ligne_data['quantite'] * float(produit.prix_unitaire)
+            )
+            quantite_totale += ligne_data['quantite']
+        commande.quantite_demandee = quantite_totale
+        commande.save()
+
         Notification.objects.create(
             type='nouvelle_commande',
             client=client,
@@ -54,12 +73,10 @@ class CommandeCreateSerializer(serializers.ModelSerializer):
                 f"a passé une nouvelle commande de {commande.quantite_demandee} unités."
             )
         )
-        
         logger.info(
             f"Commande créée : #{commande.id} - Client {client.code_client} - "
             f"{commande.quantite_demandee} unités"
         )
-        
         return commande
 
 
