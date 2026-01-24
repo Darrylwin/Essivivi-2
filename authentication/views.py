@@ -1,3 +1,6 @@
+from datetime import timedelta, timezone
+import random
+import string
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,11 +11,11 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 import logging
 
-from .models import Admin, Agent, Client
+from .models import Admin, Agent, Client, PendingUser
 from .serializers import (
-    AdminLoginSerializer, AdminSerializer, OTPRequestSerializer,
+    AdminLoginSerializer, AdminSerializer, AgentLoginSerializer, ClientLoginSerializer, ClientRegisterSerializer, OTPRequestSerializer,
     OTPVerifySerializer, AgentProfileSerializer, ClientProfileSerializer,
-    ChangePasswordSerializer, UpdatePhotoSerializer
+    ChangePasswordSerializer, ResendOTPSerializer, UpdatePhotoSerializer, MobileLoginSerializer, ValidateOTPSerializer
 )
 from .utils import create_otp, send_otp_email, verify_otp
 
@@ -517,6 +520,408 @@ class MobileLoginView(APIView):
             "message": "Connexion réussie",
             "token": str(refresh.access_token),
             "refresh": str(refresh),
-            "user_type": user_type,  # ← Frontend utilise ça pour rediriger
+            "user_type": user_type,
             "user": user_data
+        }, status=status.HTTP_200_OK)
+
+# ==================== INSCRIPTION & VALIDATION ====================
+
+class ClientRegisterView(APIView):
+    """Inscription d'un nouveau client"""
+    permission_classes = [AllowAny]
+    
+    @swagger_auto_schema(
+        request_body=ClientRegisterSerializer,
+        responses={
+            201: openapi.Response(
+                description="Inscription réussie, OTP envoyé",
+                examples={
+                    "application/json": {
+                        "message": "Inscription réussie. Un code OTP a été envoyé à votre email.",
+                        "email": "client@example.com",
+                        "otp": "123456"  # À supprimer en production
+                    }
+                }
+            ),
+            400: "Validation échouée"
+        }
+    )
+    def post(self, request):
+        logger.info("Demande d'inscription client")
+        
+        serializer = ClientRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+        
+        # Générer un OTP
+        otp_code = ''.join(random.choices(string.digits, k=6))
+        otp_expires_at = timezone.now() + timedelta(minutes=10)
+        
+        # Stocker les données temporairement
+        pending_user, created = PendingUser.objects.update_or_create(
+            email=email,
+            user_type='client',
+            defaults={
+                'data': serializer.validated_data,
+                'otp_code': otp_code,
+                'otp_expires_at': otp_expires_at
+            }
+        )
+        
+        # Envoyer l'OTP par email
+        email_sent = send_otp_email(email, otp_code)
+        
+        if email_sent:
+            logger.info(f"OTP envoyé à {email} pour inscription client")
+        else:
+            logger.error(f"Échec de l'envoi de l'OTP à {email}")
+        
+        logger.info(f"Inscription client en attente pour {email}")
+        
+        return Response({
+            "message": "Inscription réussie. Un code OTP a été envoyé à votre email.",
+            "email": email,
+            "expires_in_minutes": 10,
+            # À SUPPRIMER EN PRODUCTION
+            "otp": otp_code  # Pour faciliter les tests
+        }, status=status.HTTP_201_CREATED)
+
+
+class ValidateOTPView(APIView):
+    """Valider l'OTP et activer le compte"""
+    permission_classes = [AllowAny]
+    
+    @swagger_auto_schema(
+        request_body=ValidateOTPSerializer,
+        responses={
+            200: openapi.Response(
+                description="Compte activé avec succès",
+                examples={
+                    "application/json": {
+                        "message": "Compte activé avec succès",
+                        "token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+                        "user_type": "client",
+                        "user": {}
+                    }
+                }
+            ),
+            400: "OTP invalide ou expiré"
+        }
+    )
+    def post(self, request):
+        logger.info("Validation d'OTP pour activation de compte")
+        
+        serializer = ValidateOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+        otp = serializer.validated_data['otp']
+        
+        # Récupérer l'utilisateur en attente
+        try:
+            pending_user = PendingUser.objects.get(email=email)
+        except PendingUser.DoesNotExist:
+            logger.warning(f"Aucune inscription en attente pour {email}")
+            return Response(
+                {"error": "Aucune inscription en attente pour cet email"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Vérifier l'OTP
+        if pending_user.otp_code != otp:
+            logger.warning(f"OTP invalide pour {email}")
+            return Response(
+                {"error": "Code OTP invalide"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Vérifier l'expiration
+        if not pending_user.is_otp_valid():
+            logger.warning(f"OTP expiré pour {email}")
+            return Response(
+                {"error": "Code OTP expiré. Demandez un nouveau code."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Créer le client
+        data = pending_user.data
+        
+        try:
+            client = Client.objects.create(
+                nom_point_vente=data['nom_point_vente'],
+                nom_responsable=data['nom_responsable'],
+                telephone=data['telephone'],
+                email=data['email'],
+                adresse=data['adresse'],
+                latitude=data.get('latitude'),
+                longitude=data.get('longitude'),
+                type_client=data['type_client'],
+                statut='actif'
+            )
+            
+            # Créer un admin temporaire pour le JWT
+            admin = Admin.objects.create(
+                email=email,
+                nom=data['nom_responsable'],
+                prenom='',
+                statut='actif'
+            )
+            
+            # Supprimer l'utilisateur en attente
+            pending_user.delete()
+            
+            # Générer le token
+            refresh = RefreshToken.for_user(admin)
+            
+            logger.info(f"Compte client activé avec succès : {client.code_client}")
+            
+            return Response({
+                "message": "Compte activé avec succès",
+                "token": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user_type": "client",
+                "user": ClientProfileSerializer(client).data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de la création du client : {str(e)}")
+            return Response(
+                {"error": f"Erreur lors de la création du compte : {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ResendOTPView(APIView):
+    """Renvoyer un OTP"""
+    permission_classes = [AllowAny]
+    
+    @swagger_auto_schema(
+        request_body=ResendOTPSerializer,
+        responses={
+            200: "OTP renvoyé avec succès",
+            404: "Aucune inscription en attente"
+        }
+    )
+    def post(self, request):
+        logger.info("Demande de renvoi d'OTP")
+        
+        serializer = ResendOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+        
+        # Vérifier s'il y a une inscription en attente
+        try:
+            pending_user = PendingUser.objects.get(email=email)
+        except PendingUser.DoesNotExist:
+            logger.warning(f"Aucune inscription en attente pour {email}")
+            return Response(
+                {"error": "Aucune inscription en attente pour cet email"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Générer un nouveau OTP
+        otp_code = ''.join(random.choices(string.digits, k=6))
+        pending_user.otp_code = otp_code
+        pending_user.otp_expires_at = timezone.now() + timedelta(minutes=10)
+        pending_user.save()
+        
+        # Envoyer l'OTP
+        email_sent = send_otp_email(email, otp_code)
+        
+        if email_sent:
+            logger.info(f"Nouvel OTP envoyé à {email}")
+        else:
+            logger.error(f"Échec de l'envoi de l'OTP à {email}")
+        
+        return Response({
+            "message": "Un nouveau code OTP a été envoyé à votre email",
+            "email": email,
+            "expires_in_minutes": 10,
+            # À SUPPRIMER EN PRODUCTION
+            "otp": otp_code
+        }, status=status.HTTP_200_OK)
+
+    """Connexion mobile pour les agents (Email + Password OU OTP)"""
+    permission_classes = [AllowAny]
+    
+    @swagger_auto_schema(
+        request_body=AgentLoginSerializer,
+        responses={
+            200: openapi.Response(
+                description="Connexion réussie",
+                examples={
+                    "application/json": {
+                        "message": "Connexion réussie",
+                        "token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+                        "user_type": "agent",
+                        "user": {}
+                    }
+                }
+            ),
+            400: "Email ou mot de passe incorrect"
+        }
+    )
+    def post(self, request):
+        logger.info("Tentative de connexion agent mobile")
+        
+        serializer = AgentLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+        mot_de_passe = serializer.validated_data['mot_de_passe']
+        use_otp = serializer.validated_data.get('use_otp', False)
+        
+        # Récupérer l'agent
+        try:
+            agent = Agent.objects.get(email=email)
+        except Agent.DoesNotExist:
+            logger.warning(f"Agent non trouvé : {email}")
+            return Response(
+                {"error": "Email ou mot de passe incorrect"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Vérifier le statut
+        if agent.statut == 'inactif':
+            logger.warning(f"Compte agent inactif : {email}")
+            return Response(
+                {"error": "Votre compte est inactif"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Mode OTP
+        if use_otp:
+            # Générer et envoyer un OTP
+            otp_code = create_otp(email, 'agent')
+            email_sent = send_otp_email(email, otp_code)
+            
+            logger.info(f"OTP généré pour agent {email} : {otp_code}")
+            
+            return Response({
+                "message": "Code OTP envoyé à votre email",
+                "email": email,
+                "requires_otp": True,
+                # À SUPPRIMER EN PRODUCTION
+                "otp": otp_code
+            }, status=status.HTTP_200_OK)
+        
+        # Mode Password
+        if not check_password(mot_de_passe, agent.mot_de_passe):
+            logger.warning(f"Mot de passe incorrect pour agent {email}")
+            return Response(
+                {"error": "Email ou mot de passe incorrect"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Créer un admin temporaire pour le JWT
+        admin = Admin.objects.filter(email=email).first()
+        if not admin:
+            admin = Admin.objects.create(
+                email=email,
+                nom=agent.nom,
+                prenom=agent.prenom,
+                statut='actif'
+            )
+        
+        # Générer le token
+        refresh = RefreshToken.for_user(admin)
+        
+        logger.info(f"Connexion mobile réussie pour agent : {agent.numero_identification}")
+        
+        return Response({
+            "message": "Connexion réussie",
+            "token": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user_type": "agent",
+            "user": AgentProfileSerializer(agent).data
+        }, status=status.HTTP_200_OK)
+
+
+    """Connexion mobile pour les clients (Email + Password OU OTP)"""
+    permission_classes = [AllowAny]
+    
+    @swagger_auto_schema(
+        request_body=ClientLoginSerializer,
+        responses={
+            200: openapi.Response(
+                description="Connexion réussie",
+                examples={
+                    "application/json": {
+                        "message": "Connexion réussie",
+                        "token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+                        "user_type": "client",
+                        "user": {}
+                    }
+                }
+            ),
+            400: "Email ou mot de passe incorrect"
+        }
+    )
+    def post(self, request):
+        logger.info("Tentative de connexion client mobile")
+        
+        serializer = ClientLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+        mot_de_passe = serializer.validated_data.get('mot_de_passe')
+        use_otp = serializer.validated_data.get('use_otp', False)
+        
+        # Récupérer le client
+        try:
+            client = Client.objects.get(email=email)
+        except Client.DoesNotExist:
+            logger.warning(f"Client non trouvé : {email}")
+            return Response(
+                {"error": "Email ou mot de passe incorrect"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Vérifier le statut
+        if client.statut == 'inactif':
+            logger.warning(f"Compte client inactif : {email}")
+            return Response(
+                {"error": "Votre compte est inactif"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Mode OTP (prioritaire pour les clients)
+        if use_otp or not mot_de_passe:
+            # Générer et envoyer un OTP
+            otp_code = create_otp(email, 'client')
+            email_sent = send_otp_email(email, otp_code)
+            
+            logger.info(f"OTP généré pour client {email} : {otp_code}")
+            
+            return Response({
+                "message": "Code OTP envoyé à votre email",
+                "email": email,
+                "requires_otp": True,
+                # À SUPPRIMER EN PRODUCTION
+                "otp": otp_code
+            }, status=status.HTTP_200_OK)
+        
+        # Créer un admin temporaire pour le JWT
+        admin = Admin.objects.filter(email=email).first()
+        if not admin:
+            admin = Admin.objects.create(
+                email=email,
+                nom=client.nom_responsable,
+                prenom='',
+                statut='actif'
+            )
+        
+        # Générer le token
+        refresh = RefreshToken.for_user(admin)
+        
+        logger.info(f"Connexion mobile réussie pour client : {client.code_client}")
+        
+        return Response({
+            "message": "Connexion réussie",
+            "token": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user_type": "client",
+            "user": ClientProfileSerializer(client).data
         }, status=status.HTTP_200_OK)

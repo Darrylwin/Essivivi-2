@@ -3,7 +3,7 @@ from .views import (
     AdminLoginView, OTPRequestView, OTPVerifyView,
     ProfileView, ChangePasswordView, UpdatePhotoView,
     ClientRegisterView, ValidateOTPView, ResendOTPView,
-    MobileLoginView  # ← Une seule vue
+    MobileLoginView
 )
 
 urlpatterns = [

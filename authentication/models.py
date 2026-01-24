@@ -204,3 +204,35 @@ class OTP(models.Model):
     def generate_otp():
         """Génère un code OTP à 6 chiffres"""
         return ''.join(random.choices(string.digits, k=6))
+
+class PendingUser(models.Model):
+    """Modèle pour les utilisateurs en attente de validation OTP"""
+    
+    USER_TYPE_CHOICES = [
+        ('agent', 'Agent'),
+        ('client', 'Client'),
+    ]
+    
+    user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES)
+    email = models.EmailField(unique=True)
+    
+    # Données temporaires (seront transférées après validation)
+    data = models.JSONField(help_text='Données temporaires de l\'utilisateur')
+    
+    # OTP
+    otp_code = models.CharField(max_length=6)
+    otp_expires_at = models.DateTimeField()
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'pending_users'
+        verbose_name = 'Utilisateur en attente'
+        verbose_name_plural = 'Utilisateurs en attente'
+    
+    def __str__(self):
+        return f"{self.user_type} - {self.email}"
+    
+    def is_otp_valid(self):
+        """Vérifie si l'OTP est encore valide"""
+        return timezone.now() < self.otp_expires_at

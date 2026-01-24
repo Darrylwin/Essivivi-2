@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.hashers import make_password, check_password
-from .models import Admin, Agent, Client, OTP
+from .models import Admin, Agent, Client, OTP, PendingUser
 
 
 class AdminLoginSerializer(serializers.Serializer):
@@ -72,3 +72,54 @@ class MobileLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     mot_de_passe = serializers.CharField(write_only=True)
     use_otp = serializers.BooleanField(default=False, required=False)
+
+class ClientRegisterSerializer(serializers.Serializer):
+    """Serializer pour l'inscription d'un client"""
+    nom_point_vente = serializers.CharField(max_length=200)
+    nom_responsable = serializers.CharField(max_length=100)
+    telephone = serializers.CharField(max_length=20)
+    email = serializers.EmailField()
+    mot_de_passe = serializers.CharField(write_only=True, min_length=6)
+    adresse = serializers.CharField()
+    latitude = serializers.DecimalField(max_digits=10, decimal_places=8, required=False, allow_null=True)
+    longitude = serializers.DecimalField(max_digits=11, decimal_places=8, required=False, allow_null=True)
+    type_client = serializers.ChoiceField(choices=['detaillant', 'grossiste', 'institution'])
+    
+    def validate_email(self, value):
+        """Vérifier que l'email n'existe pas déjà"""
+        if Client.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Un client avec cet email existe déjà")
+        if PendingUser.objects.filter(email=value, user_type='client').exists():
+            raise serializers.ValidationError("Une inscription est déjà en attente pour cet email")
+        return value
+    
+    def validate_telephone(self, value):
+        """Vérifier que le téléphone n'existe pas déjà"""
+        if Client.objects.filter(telephone=value).exists():
+            raise serializers.ValidationError("Un client avec ce numéro de téléphone existe déjà")
+        return value
+
+
+class ValidateOTPSerializer(serializers.Serializer):
+    """Serializer pour valider l'OTP après inscription"""
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=6, min_length=6)
+
+
+class AgentLoginSerializer(serializers.Serializer):
+    """Serializer pour la connexion agent mobile"""
+    email = serializers.EmailField()
+    mot_de_passe = serializers.CharField(write_only=True)
+    use_otp = serializers.BooleanField(default=False, required=False)
+
+
+class ClientLoginSerializer(serializers.Serializer):
+    """Serializer pour la connexion client mobile"""
+    email = serializers.EmailField()
+    mot_de_passe = serializers.CharField(write_only=True, required=False)
+    use_otp = serializers.BooleanField(default=False, required=False)
+
+
+class ResendOTPSerializer(serializers.Serializer):
+    """Serializer pour renvoyer un OTP"""
+    email = serializers.EmailField()
