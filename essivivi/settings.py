@@ -82,6 +82,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'products': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
         'tours': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
@@ -136,6 +141,7 @@ INSTALLED_APPS = [
     'orders',
     'tracking',
     'dashboard',
+    'products',
 ]
 
 # Modèle d'utilisateur personnalisé

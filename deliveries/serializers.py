@@ -1,13 +1,29 @@
 from rest_framework import serializers
 from django.utils import timezone
-from datetime import datetime
-from .models import Livraison
+from .models import LigneLivraison, Livraison
+from products.serializers import ProduitListSerializer
 from authentication.models import Agent, Client
 from tours.models import Tournee
 import logging
 
 logger = logging.getLogger('deliveries')
 
+class LigneLivraisonSerializer(serializers.ModelSerializer):
+    """Serializer pour les lignes de livraison"""
+    produit_detail = ProduitListSerializer(source='produit', read_only=True)
+    
+    class Meta:
+        model = LigneLivraison
+        fields = [
+            'id', 'produit', 'produit_detail', 'quantite',
+            'prix_unitaire', 'montant', 'created_at'
+        ]
+        read_only_fields = ['id', 'montant', 'created_at']
+
+class LigneLivraisonCreateSerializer(serializers.Serializer):
+    """Serializer pour créer une ligne de livraison"""
+    produit_id = serializers.IntegerField()
+    quantite = serializers.IntegerField(min_value=1)
 
 class LivraisonCreateSerializer(serializers.Serializer):
     """Serializer pour créer une livraison"""
@@ -25,15 +41,13 @@ class LivraisonCreateSerializer(serializers.Serializer):
         choices=['detaillant', 'grossiste', 'institution'],
         required=False
     )
+
+    lignes = LigneLivraisonCreateSerializer(many=True)
     
     # Coordonnées GPS de la livraison
     latitude = serializers.DecimalField(max_digits=10, decimal_places=8)
     longitude = serializers.DecimalField(max_digits=11, decimal_places=8)
-    
-    # Informations de livraison
-    quantite_livree = serializers.IntegerField(min_value=1)
-    montant_percu = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
-    
+        
     def validate(self, data):
         """Validation personnalisée"""
         client_id = data.get('client_id')
@@ -178,6 +192,9 @@ class LivraisonDetailSerializer(serializers.ModelSerializer):
     
     tournee_id = serializers.IntegerField(source='tournee.id', read_only=True)
     distance_client = serializers.FloatField(read_only=True)
+
+    lignes = LigneLivraisonSerializer(many=True, read_only=True)
+    montant_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     
     class Meta:
         model = Livraison
@@ -189,6 +206,7 @@ class LivraisonDetailSerializer(serializers.ModelSerializer):
             'latitude', 'longitude', 'distance_client',
             'quantite_livree', 'montant_percu',
             'date_livraison', 'heure_livraison', 'duree_livraison',
-            'statut', 'created_at', 'updated_at'
+            'statut', 'created_at', 'updated_at', 'lignes',
+            'montant_total',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']

@@ -21,4 +21,7 @@ urlpatterns = [
     
     # Module dashboard et statistiques
     path('', include('dashboard.urls')),
+    
+    # Module produits et catégories
+    path('', include('products.urls')),
 ]

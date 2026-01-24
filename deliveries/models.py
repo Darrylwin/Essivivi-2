@@ -48,12 +48,20 @@ class Livraison(models.Model):
         verbose_name='Longitude'
     )
     
-    # Informations de livraison
-    quantite_livree = models.IntegerField(verbose_name='Quantité livrée')
+    # Informations de livraison (MODIFIÉS - maintenant optionnels)
+    quantite_livree = models.IntegerField(
+        verbose_name='Quantité livrée',
+        null=True,
+        blank=True,
+        help_text='Optionnel - calculé depuis les lignes'
+    )
     montant_percu = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        verbose_name='Montant perçu (FCFA)'
+        verbose_name='Montant perçu (FCFA)',
+        null=True,
+        blank=True,
+        help_text='Optionnel - calculé depuis les lignes'
     )
     
     # Date et heure
@@ -123,3 +131,61 @@ class Livraison(models.Model):
                 self.client.longitude
             )
         return None
+    
+    @property
+    def montant_total(self):
+        """Calcule le montant total à partir des lignes de livraison"""
+        total = sum(ligne.montant for ligne in self.lignes.all())
+        return total if total > 0 else (self.montant_percu or Decimal('0'))
+    
+    @property
+    def quantite_totale(self):
+        """Calcule la quantité totale à partir des lignes de livraison"""
+        total = sum(ligne.quantite for ligne in self.lignes.all())
+        return total if total > 0 else (self.quantite_livree or 0)
+
+
+# NOUVEAU MODÈLE - AJOUTE À LA FIN DU FICHIER
+class LigneLivraison(models.Model):
+    """Détail des produits livrés dans une livraison"""
+    
+    livraison = models.ForeignKey(
+        Livraison,
+        on_delete=models.CASCADE,
+        related_name='lignes',
+        verbose_name='Livraison'
+    )
+    produit = models.ForeignKey(
+        'products.Produit',
+        on_delete=models.PROTECT,
+        related_name='lignes_livraison',
+        verbose_name='Produit'
+    )
+    quantite = models.IntegerField(
+        verbose_name='Quantité livrée'
+    )
+    prix_unitaire = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='Prix unitaire au moment de la livraison'
+    )
+    montant = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='Montant total (quantité × prix)'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'lignes_livraison'
+        verbose_name = 'Ligne de livraison'
+        verbose_name_plural = 'Lignes de livraison'
+    
+    def __str__(self):
+        return f"{self.produit.nom} × {self.quantite}"
+    
+    def save(self, *args, **kwargs):
+        # Calculer automatiquement le montant
+        self.montant = self.quantite * self.prix_unitaire
+        super().save(*args, **kwargs)

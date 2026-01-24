@@ -29,7 +29,12 @@ class Commande(models.Model):
     )
     
     # Informations de la commande
-    quantite_demandee = models.IntegerField(verbose_name='Quantité demandée')
+    quantite_demandee = models.IntegerField(
+        verbose_name='Quantité demandée',
+        null=True,
+        blank=True,
+        help_text='Optionnel - calculé depuis les lignes'
+    )
     date_livraison_souhaitee = models.DateField(
         verbose_name='Date de livraison souhaitée'
     )
@@ -78,6 +83,65 @@ class Commande(models.Model):
         """Vérifie si la commande peut être annulée"""
         return self.statut in ['en_attente', 'acceptee']
     
+    @property
+    def montant_total(self):
+        """Calcule le montant total de la commande"""
+        from decimal import Decimal
+        total = sum(ligne.montant for ligne in self.lignes.all())
+        return total if total > 0 else Decimal('0')
+    
+    @property
+    def quantite_totale(self):
+        """Calcule la quantité totale commandée"""
+        total = sum(ligne.quantite for ligne in self.lignes.all())
+        return total if total > 0 else (self.quantite_demandee or 0)
+
+
+# NOUVEAU MODÈLE - AJOUTE À LA FIN
+class LigneCommande(models.Model):
+    """Détail des produits commandés"""
+    
+    commande = models.ForeignKey(
+        Commande,
+        on_delete=models.CASCADE,
+        related_name='lignes',
+        verbose_name='Commande'
+    )
+    produit = models.ForeignKey(
+        'products.Produit',
+        on_delete=models.PROTECT,
+        related_name='lignes_commande',
+        verbose_name='Produit'
+    )
+    quantite = models.IntegerField(
+        verbose_name='Quantité commandée'
+    )
+    prix_unitaire = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='Prix unitaire au moment de la commande'
+    )
+    montant = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='Montant total'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'lignes_commande'
+        verbose_name = 'Ligne de commande'
+        verbose_name_plural = 'Lignes de commande'
+    
+    def __str__(self):
+        return f"{self.produit.nom} × {self.quantite}"
+    
+    def save(self, *args, **kwargs):
+        self.montant = self.quantite * self.prix_unitaire
+        super().save(*args, **kwargs)
+
+
 class Notification(models.Model):
     """Modèle pour les notifications système"""
     
