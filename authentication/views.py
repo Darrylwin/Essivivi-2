@@ -1,4 +1,5 @@
-from datetime import timedelta, timezone
+from datetime import timedelta
+from django.utils import timezone
 import random
 import string
 from rest_framework import status
@@ -404,11 +405,23 @@ class ClientRegisterView(APIView):
         otp_expires_at = timezone.now() + timedelta(minutes=10)
         
         # Stocker les données temporairement
+        # Convertir les Decimal en float pour JSONField
+        def convert_decimals(obj):
+            if isinstance(obj, dict):
+                return {k: convert_decimals(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_decimals(v) for v in obj]
+            elif hasattr(obj, 'is_finite') and hasattr(obj, 'as_tuple'):
+                # C'est un Decimal
+                return float(obj)
+            return obj
+
+        validated_data_json = convert_decimals(serializer.validated_data)
         pending_user, created = PendingUser.objects.update_or_create(
             email=email,
             user_type='client',
             defaults={
-                'data': serializer.validated_data,
+                'data': validated_data_json,
                 'otp_code': otp_code,
                 'otp_expires_at': otp_expires_at
             }
