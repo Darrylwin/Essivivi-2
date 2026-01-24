@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from authentication.models import Admin, Agent, Client, Tricycle
+from authentication.models import Agent, Client, Tricycle
 from django.contrib.auth.hashers import make_password
 import logging
 
@@ -13,45 +13,6 @@ class TricycleSerializer(serializers.ModelSerializer):
         model = Tricycle
         fields = ['id', 'plaque_immatriculation', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
-
-
-class AdminCreateSerializer(serializers.ModelSerializer):
-    """Serializer pour créer un admin"""
-    mot_de_passe = serializers.CharField(write_only=True, min_length=6)
-    
-    class Meta:
-        model = Admin
-        fields = ['id', 'nom', 'prenom', 'email', 'mot_de_passe', 'statut']
-        read_only_fields = ['id']
-    
-    def create(self, validated_data):
-        logger.info(f"Création d'un nouvel admin : {validated_data.get('email')}")
-        
-        mot_de_passe = validated_data.pop('mot_de_passe')
-        admin = Admin.objects.create(**validated_data)
-        admin.set_password(mot_de_passe)
-        admin.save()
-        
-        logger.info(f"Admin créé avec succès : {admin.email}")
-        return admin
-
-
-class AdminUpdateSerializer(serializers.ModelSerializer):
-    """Serializer pour modifier un admin"""
-    
-    class Meta:
-        model = Admin
-        fields = ['nom', 'prenom', 'email', 'statut']
-
-
-class AdminListSerializer(serializers.ModelSerializer):
-    """Serializer pour lister les admins"""
-    
-    class Meta:
-        model = Admin
-        fields = ['id', 'nom', 'prenom', 'email', 'statut', 'is_staff', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
-
 
 class AgentCreateSerializer(serializers.ModelSerializer):
     """Serializer pour créer un agent"""
@@ -170,12 +131,6 @@ class AgentDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'numero_identification', 'created_at', 'updated_at']
 
-
-class AgentStatusSerializer(serializers.Serializer):
-    """Serializer pour changer le statut d'un agent"""
-    statut = serializers.ChoiceField(choices=['actif', 'inactif', 'en_tournee'])
-
-
 class ClientCreateSerializer(serializers.ModelSerializer):
     """Serializer pour créer un client"""
     
@@ -234,8 +189,3 @@ class ClientDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'code_client', 'date_inscription', 'created_at', 'updated_at']
-
-
-class ClientStatusSerializer(serializers.Serializer):
-    """Serializer pour changer le statut d'un client"""
-    statut = serializers.ChoiceField(choices=['actif', 'inactif'])

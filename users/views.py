@@ -10,11 +10,10 @@ import logging
 
 from authentication.models import Admin, Agent, Client, Tricycle
 from .serializers import (
-    AdminCreateSerializer, AdminUpdateSerializer, AdminListSerializer,
     AgentCreateSerializer, AgentUpdateSerializer, AgentListSerializer, 
-    AgentDetailSerializer, AgentStatusSerializer,
+    AgentDetailSerializer,
     ClientCreateSerializer, ClientUpdateSerializer, ClientListSerializer,
-    ClientDetailSerializer, ClientStatusSerializer,
+    ClientDetailSerializer,
     TricycleSerializer
 )
 from .permissions import IsAdmin, IsAdminOrReadOnly
@@ -70,94 +69,6 @@ class TricycleViewSet(viewsets.ModelViewSet):
             {"message": "Tricycle supprimé avec succès"},
             status=status.HTTP_204_NO_CONTENT
         )
-
-
-# ==================== ADMINS ====================
-
-class AdminListView(APIView):
-    """Lister tous les admins"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(
-        responses={200: AdminListSerializer(many=True)}
-    )
-    def get(self, request):
-        logger.info("Récupération de la liste des admins")
-        admins = Admin.objects.all().order_by('-created_at')
-        serializer = AdminListSerializer(admins, many=True)
-        logger.info(f"{admins.count()} admins récupérés")
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class AdminCreateView(APIView):
-    """Créer un admin"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(
-        request_body=AdminCreateSerializer,
-        responses={201: AdminListSerializer()}
-    )
-    def post(self, request):
-        logger.info("Demande de création d'admin")
-        serializer = AdminCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        admin = serializer.save()
-        
-        return Response(
-            AdminListSerializer(admin).data,
-            status=status.HTTP_201_CREATED
-        )
-
-
-class AdminDetailView(APIView):
-    """Récupérer, modifier ou supprimer un admin"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(responses={200: AdminListSerializer()})
-    def get(self, request, pk):
-        logger.info(f"Récupération de l'admin ID {pk}")
-        admin = get_object_or_404(Admin, pk=pk)
-        serializer = AdminListSerializer(admin)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
-    @swagger_auto_schema(
-        request_body=AdminUpdateSerializer,
-        responses={200: AdminListSerializer()}
-    )
-    def put(self, request, pk):
-        logger.info(f"Mise à jour de l'admin ID {pk}")
-        admin = get_object_or_404(Admin, pk=pk)
-        serializer = AdminUpdateSerializer(admin, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        
-        logger.info(f"Admin mis à jour : {admin.email}")
-        return Response(
-            AdminListSerializer(admin).data,
-            status=status.HTTP_200_OK
-        )
-    
-    def delete(self, request, pk):
-        logger.info(f"Suppression de l'admin ID {pk}")
-        admin = get_object_or_404(Admin, pk=pk)
-        
-        # Empêcher la suppression de soi-même
-        if admin.id == request.user.id:
-            logger.warning(f"Tentative de suppression de son propre compte par {admin.email}")
-            return Response(
-                {"error": "Vous ne pouvez pas supprimer votre propre compte"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        email = admin.email
-        admin.delete()
-        logger.info(f"Admin supprimé : {email}")
-        
-        return Response(
-            {"message": "Admin supprimé avec succès"},
-            status=status.HTTP_204_NO_CONTENT
-        )
-
 
 # ==================== AGENTS ====================
 
@@ -261,33 +172,6 @@ class AgentDetailView(APIView):
             {"message": "Agent supprimé avec succès"},
             status=status.HTTP_204_NO_CONTENT
         )
-
-
-class AgentStatusView(APIView):
-    """Changer le statut d'un agent"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(
-        request_body=AgentStatusSerializer,
-        responses={200: AgentDetailSerializer()}
-    )
-    def patch(self, request, pk):
-        logger.info(f"Changement de statut pour l'agent ID {pk}")
-        agent = get_object_or_404(Agent, pk=pk)
-        serializer = AgentStatusSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        old_statut = agent.statut
-        agent.statut = serializer.validated_data['statut']
-        agent.save()
-        
-        logger.info(f"Statut de l'agent {agent.numero_identification} changé : {old_statut} → {agent.statut}")
-        
-        return Response(
-            AgentDetailSerializer(agent).data,
-            status=status.HTTP_200_OK
-        )
-
 
 # ==================== CLIENTS ====================
 
@@ -397,30 +281,4 @@ class ClientDetailView(APIView):
         return Response(
             {"message": "Client supprimé avec succès"},
             status=status.HTTP_204_NO_CONTENT
-        )
-
-
-class ClientStatusView(APIView):
-    """Changer le statut d'un client"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(
-        request_body=ClientStatusSerializer,
-        responses={200: ClientDetailSerializer()}
-    )
-    def patch(self, request, pk):
-        logger.info(f"Changement de statut pour le client ID {pk}")
-        client = get_object_or_404(Client, pk=pk)
-        serializer = ClientStatusSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        old_statut = client.statut
-        client.statut = serializer.validated_data['statut']
-        client.save()
-        
-        logger.info(f"Statut du client {client.code_client} changé : {old_statut} → {client.statut}")
-        
-        return Response(
-            ClientDetailSerializer(client).data,
-            status=status.HTTP_200_OK
         )

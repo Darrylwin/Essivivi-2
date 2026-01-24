@@ -16,10 +16,7 @@ from deliveries.models import Livraison
 from orders.models import Commande
 from tracking.models import PositionAgent
 from .serializers import (
-    DashboardAdminSerializer, DashboardAgentSerializer,
-    StatistiquesPeriodiqueSerializer, PerformanceAgentSerializer,
-    ZoneLivraisonSerializer, HeurePointeSerializer,
-    EvolutionTemporelleSerializer, KPISerializer
+    DashboardAdminSerializer, DashboardAgentSerializer, PerformanceAgentSerializer, KPISerializer
 )
 from users.permissions import IsAdmin
 
@@ -194,96 +191,6 @@ class DashboardAgentView(APIView):
 
 
 # ==================== STATISTIQUES ====================
-
-class StatistiquesView(APIView):
-    """Statistiques sur une période"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter('periode', openapi.IN_QUERY, description="Période (jour/semaine/mois/annee)", type=openapi.TYPE_STRING, required=True),
-            openapi.Parameter('date', openapi.IN_QUERY, description="Date de référence (YYYY-MM-DD)", type=openapi.TYPE_STRING),
-        ],
-        responses={200: StatistiquesPeriodiqueSerializer()}
-    )
-    def get(self, request):
-        logger.info("Récupération des statistiques périodiques")
-        
-        periode = request.query_params.get('periode', 'jour')
-        date_ref = request.query_params.get('date', None)
-        
-        if date_ref:
-            date_reference = datetime.strptime(date_ref, '%Y-%m-%d').date()
-        else:
-            date_reference = timezone.now().date()
-        
-        # Calculer les dates de début et fin selon la période
-        if periode == 'jour':
-            date_debut = date_reference
-            date_fin = date_reference
-        elif periode == 'semaine':
-            date_debut = date_reference - timedelta(days=date_reference.weekday())
-            date_fin = date_debut + timedelta(days=6)
-        elif periode == 'mois':
-            date_debut = date_reference.replace(day=1)
-            # Dernier jour du mois
-            if date_reference.month == 12:
-                date_fin = date_reference.replace(day=31)
-            else:
-                date_fin = (date_reference.replace(month=date_reference.month + 1, day=1) - timedelta(days=1))
-        elif periode == 'annee':
-            date_debut = date_reference.replace(month=1, day=1)
-            date_fin = date_reference.replace(month=12, day=31)
-        else:
-            return Response(
-                {"error": "Période invalide (jour/semaine/mois/annee)"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Récupérer les livraisons de la période
-        livraisons = Livraison.objects.filter(
-            date_livraison__gte=date_debut,
-            date_livraison__lte=date_fin
-        )
-        
-        stats = livraisons.aggregate(
-            total_livraisons=Count('id'),
-            total_quantite=Sum('quantite_livree'),
-            total_montant=Sum('montant_percu')
-        )
-        
-        # Calculer les moyennes
-        nombre_jours = (date_fin - date_debut).days + 1
-        total_livraisons = stats['total_livraisons'] or 0
-        
-        moyenne_livraisons_jour = total_livraisons / nombre_jours if nombre_jours > 0 else 0
-        moyenne_quantite_livraison = (stats['total_quantite'] / total_livraisons) if total_livraisons > 0 else 0
-        montant_moyen_livraison = (stats['total_montant'] / total_livraisons) if total_livraisons > 0 else Decimal('0')
-        
-        # Agents actifs
-        agents_actifs = livraisons.values('agent').distinct().count()
-        moyenne_livraisons_agent = total_livraisons / agents_actifs if agents_actifs > 0 else 0
-        
-        data = {
-            'periode': periode,
-            'date_debut': date_debut,
-            'date_fin': date_fin,
-            'total_livraisons': total_livraisons,
-            'total_quantite': stats['total_quantite'] or 0,
-            'total_montant': stats['total_montant'] or Decimal('0'),
-            'moyenne_livraisons_par_jour': round(moyenne_livraisons_jour, 2),
-            'moyenne_quantite_par_livraison': round(moyenne_quantite_livraison, 2),
-            'montant_moyen_par_livraison': montant_moyen_livraison,
-            'nombre_agents_actifs': agents_actifs,
-            'moyenne_livraisons_par_agent': round(moyenne_livraisons_agent, 2)
-        }
-        
-        serializer = StatistiquesPeriodiqueSerializer(data)
-        logger.info(f"Statistiques générées pour la période {periode}")
-        
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
 class PerformanceAgentsView(APIView):
     """Performance de tous les agents"""
     permission_classes = [IsAuthenticated, IsAdmin]
@@ -358,104 +265,6 @@ class PerformanceAgentsView(APIView):
         logger.info(f"Performance calculée pour {len(performances)} agents")
         
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class HeuresPointeView(APIView):
-    """Heures de pointe des livraisons"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter('date', openapi.IN_QUERY, description="Date (YYYY-MM-DD)", type=openapi.TYPE_STRING),
-        ],
-        responses={200: HeurePointeSerializer(many=True)}
-    )
-    def get(self, request):
-        logger.info("Calcul des heures de pointe")
-        
-        date_str = request.query_params.get('date', None)
-        
-        if date_str:
-            date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        else:
-            date = timezone.now().date()
-        
-        # Récupérer les livraisons du jour
-        livraisons = Livraison.objects.filter(date_livraison=date)
-        
-        # Grouper par heure
-        heures_stats = {}
-        for heure in range(24):
-            heures_stats[heure] = {
-                'heure': heure,
-                'nombre_livraisons': 0,
-                'quantite_totale': 0
-            }
-        
-        for livraison in livraisons:
-            heure = livraison.heure_livraison.hour
-            heures_stats[heure]['nombre_livraisons'] += 1
-            heures_stats[heure]['quantite_totale'] += livraison.quantite_livree
-        
-        # Convertir en liste
-        heures_list = list(heures_stats.values())
-        
-        serializer = HeurePointeSerializer(heures_list, many=True)
-        logger.info(f"Heures de pointe calculées pour le {date}")
-        
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class EvolutionTemporelleView(APIView):
-    """Évolution des livraisons dans le temps"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter('date_debut', openapi.IN_QUERY, description="Date de début (YYYY-MM-DD)", type=openapi.TYPE_STRING, required=True),
-            openapi.Parameter('date_fin', openapi.IN_QUERY, description="Date de fin (YYYY-MM-DD)", type=openapi.TYPE_STRING, required=True),
-        ],
-        responses={200: EvolutionTemporelleSerializer(many=True)}
-    )
-    def get(self, request):
-        logger.info("Calcul de l'évolution temporelle")
-        
-        date_debut_str = request.query_params.get('date_debut', None)
-        date_fin_str = request.query_params.get('date_fin', None)
-        
-        if not date_debut_str or not date_fin_str:
-            return Response(
-                {"error": "Les paramètres date_debut et date_fin sont obligatoires"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        date_debut = datetime.strptime(date_debut_str, '%Y-%m-%d').date()
-        date_fin = datetime.strptime(date_fin_str, '%Y-%m-%d').date()
-        
-        # Récupérer les statistiques par jour
-        livraisons = Livraison.objects.filter(
-            date_livraison__gte=date_debut,
-            date_livraison__lte=date_fin
-        ).values('date_livraison').annotate(
-            livraisons=Count('id'),
-            quantite=Sum('quantite_livree'),
-            montant=Sum('montant_percu')
-        ).order_by('date_livraison')
-        
-        evolution = []
-        for stat in livraisons:
-            evolution.append({
-                'date': stat['date_livraison'],
-                'livraisons': stat['livraisons'],
-                'quantite': stat['quantite'],
-                'montant': stat['montant']
-            })
-        
-        serializer = EvolutionTemporelleSerializer(evolution, many=True)
-        logger.info(f"Évolution calculée de {date_debut} à {date_fin}")
-        
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
 
 class KPIView(APIView):
     """Indicateurs clés de performance (KPI)"""

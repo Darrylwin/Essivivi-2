@@ -3,8 +3,6 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
-from datetime import timedelta
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 import logging
@@ -14,7 +12,6 @@ from authentication.models import Agent
 from .serializers import (
     PositionAgentCreateSerializer, PositionAgentSerializer,
     PositionAgentListSerializer, AgentEnTourneeSerializer,
-    TempsEstimeSerializer
 )
 from .permissions import IsAgent, IsAgentOrAdmin
 from users.permissions import IsAdmin
@@ -215,108 +212,6 @@ class AgentsEnTourneeView(APIView):
         logger.info(f"{agents.count()} agents en tournée")
         
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class TempsEstimeView(APIView):
-    """Calculer le temps estimé d'arrivée (Admin uniquement)"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(
-        request_body=TempsEstimeSerializer,
-        responses={
-            200: openapi.Response(
-                description="Temps estimé calculé",
-                examples={
-                    "application/json": {
-                        "agent_id": 1,
-                        "agent_numero": "AGT-123456",
-                        "position_actuelle": {
-                            "latitude": 5.3599517,
-                            "longitude": -4.0082563
-                        },
-                        "destination": {
-                            "latitude": 5.3650000,
-                            "longitude": -4.0100000
-                        },
-                        "distance_metres": 876.5,
-                        "distance_km": 0.88,
-                        "vitesse_moyenne_kmh": 20,
-                        "temps_estime_minutes": 2.6,
-                        "heure_arrivee_estimee": "2025-01-23T15:32:00Z"
-                    }
-                }
-            ),
-            404: "Agent ou position non trouvée"
-        }
-    )
-    def post(self, request):
-        logger.info("Calcul du temps estimé d'arrivée")
-        
-        serializer = TempsEstimeSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        agent_id = serializer.validated_data['agent_id']
-        dest_lat = serializer.validated_data['destination_latitude']
-        dest_lon = serializer.validated_data['destination_longitude']
-        vitesse_moyenne = serializer.validated_data.get('vitesse_moyenne', 20)
-        
-        # Récupérer l'agent
-        agent = Agent.objects.get(id=agent_id)
-        
-        # Récupérer la dernière position
-        position = PositionAgent.get_derniere_position(agent)
-        
-        if not position:
-            return Response(
-                {"error": "Aucune position enregistrée pour cet agent"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Calculer la distance
-        distance_metres = PositionAgent.calculer_distance(
-            position.latitude,
-            position.longitude,
-            dest_lat,
-            dest_lon
-        )
-        distance_km = distance_metres / 1000
-        
-        # Calculer le temps estimé
-        temps_minutes = PositionAgent.calculer_temps_estime(
-            position.latitude,
-            position.longitude,
-            dest_lat,
-            dest_lon,
-            vitesse_moyenne
-        )
-        
-        # Calculer l'heure d'arrivée estimée
-        heure_arrivee = timezone.now() + timedelta(minutes=temps_minutes)
-        
-        logger.info(
-            f"Temps estimé calculé pour {agent.numero_identification} : "
-            f"{temps_minutes} minutes ({distance_km:.2f} km)"
-        )
-        
-        return Response({
-            "agent_id": agent.id,
-            "agent_numero": agent.numero_identification,
-            "position_actuelle": {
-                "latitude": float(position.latitude),
-                "longitude": float(position.longitude),
-                "timestamp": position.timestamp
-            },
-            "destination": {
-                "latitude": float(dest_lat),
-                "longitude": float(dest_lon)
-            },
-            "distance_metres": round(distance_metres, 2),
-            "distance_km": round(distance_km, 2),
-            "vitesse_moyenne_kmh": vitesse_moyenne,
-            "temps_estime_minutes": temps_minutes,
-            "heure_arrivee_estimee": heure_arrivee
-        }, status=status.HTTP_200_OK)
-
 
 class ParcoursAgentView(APIView):
     """Récupérer le parcours complet d'un agent pour une tournée"""

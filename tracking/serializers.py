@@ -147,9 +147,6 @@ class AgentEnTourneeSerializer(serializers.Serializer):
             minutes = delta.total_seconds() / 60
             return round(minutes, 1)
         return None
-
-
-class TempsEstimeSerializer(serializers.Serializer):
     """Serializer pour le calcul du temps estimé"""
     agent_id = serializers.IntegerField()
     destination_latitude = serializers.DecimalField(max_digits=10, decimal_places=8)
