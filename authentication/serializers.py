@@ -65,13 +65,16 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class UpdatePhotoSerializer(serializers.Serializer):
     """Serializer pour mettre à jour la photo de profil"""
+    # Ce serializer n'est plus utilisé car on utilise request.FILES directement
+    # Mais on le garde pour la documentation
     photo = serializers.ImageField()
+
 
 class MobileLoginSerializer(serializers.Serializer):
     """Serializer pour la connexion mobile (Agent OU Client)"""
     email = serializers.EmailField()
     mot_de_passe = serializers.CharField(write_only=True)
-    use_otp = serializers.BooleanField(default=False, required=False)
+
 
 class ClientRegisterSerializer(serializers.Serializer):
     """Serializer pour l'inscription d'un client"""
@@ -98,27 +101,10 @@ class ClientRegisterSerializer(serializers.Serializer):
         if Client.objects.filter(telephone=value).exists():
             raise serializers.ValidationError("Un client avec ce numéro de téléphone existe déjà")
         return value
-
-
-class ValidateOTPSerializer(serializers.Serializer):
-    """Serializer pour valider l'OTP après inscription"""
-    email = serializers.EmailField()
-    otp = serializers.CharField(max_length=6, min_length=6)
-
-
-class AgentLoginSerializer(serializers.Serializer):
-    """Serializer pour la connexion agent mobile"""
-    email = serializers.EmailField()
-    mot_de_passe = serializers.CharField(write_only=True)
-    use_otp = serializers.BooleanField(default=False, required=False)
-
-
-class ClientLoginSerializer(serializers.Serializer):
-    """Serializer pour la connexion client mobile"""
-    email = serializers.EmailField()
-    mot_de_passe = serializers.CharField(write_only=True, required=False)
-    use_otp = serializers.BooleanField(default=False, required=False)
-
+    
+    def create(self, validated_data):
+        """Créer un client après validation OTP"""
+        return Client(**validated_data)
 
 class ResendOTPSerializer(serializers.Serializer):
     """Serializer pour renvoyer un OTP"""

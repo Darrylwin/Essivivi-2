@@ -99,7 +99,7 @@ class Agent(models.Model):
     photo = models.ImageField(upload_to='agents/photos/', null=True, blank=True)
     tricycle = models.ForeignKey(Tricycle, on_delete=models.SET_NULL, null=True, blank=True, related_name='agents')
     statut = models.CharField(max_length=15, choices=STATUT_CHOICES, default='actif')
-    mot_de_passe = models.CharField(max_length=255)  # Stockera le hash du mot de passe
+    mot_de_passe = models.CharField(max_length=255)  # Password hashé
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -120,7 +120,18 @@ class Agent(models.Model):
                 if not Agent.objects.filter(numero_identification=numero).exists():
                     self.numero_identification = numero
                     break
+        
+        # Hasher le mot de passe si c'est nouveau ou modifié
+        if self.mot_de_passe and not self.mot_de_passe.startswith('pbkdf2_sha256$'):
+            from django.contrib.auth.hashers import make_password
+            self.mot_de_passe = make_password(self.mot_de_passe)
+        
         super().save(*args, **kwargs)
+    
+    def check_password(self, raw_password):
+        """Vérifier le mot de passe"""
+        from django.contrib.auth.hashers import check_password
+        return check_password(raw_password, self.mot_de_passe)
 
 
 class Client(models.Model):
@@ -141,7 +152,8 @@ class Client(models.Model):
     nom_point_vente = models.CharField(max_length=200)
     nom_responsable = models.CharField(max_length=100)
     telephone = models.CharField(max_length=20, unique=True)
-    email = models.EmailField(null=True, blank=True)
+    email = models.EmailField(unique=True)  # Rendre unique et obligatoire
+    mot_de_passe = models.CharField(max_length=255)  # Ajouter mot de passe
     adresse = models.TextField()
     latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
     longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
@@ -169,7 +181,18 @@ class Client(models.Model):
                 if not Client.objects.filter(code_client=code).exists():
                     self.code_client = code
                     break
+        
+        # Hasher le mot de passe si c'est nouveau ou modifié
+        if self.mot_de_passe and not self.mot_de_passe.startswith('pbkdf2_sha256$'):
+            from django.contrib.auth.hashers import make_password
+            self.mot_de_passe = make_password(self.mot_de_passe)
+        
         super().save(*args, **kwargs)
+    
+    def check_password(self, raw_password):
+        """Vérifier le mot de passe"""
+        from django.contrib.auth.hashers import check_password
+        return check_password(raw_password, self.mot_de_passe)
 
 
 class OTP(models.Model):
@@ -204,6 +227,7 @@ class OTP(models.Model):
     def generate_otp():
         """Génère un code OTP à 6 chiffres"""
         return ''.join(random.choices(string.digits, k=6))
+
 
 class PendingUser(models.Model):
     """Modèle pour les utilisateurs en attente de validation OTP"""

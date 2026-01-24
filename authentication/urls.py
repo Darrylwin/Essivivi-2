@@ -1,9 +1,9 @@
 from django.urls import path
 from .views import (
-    AdminLoginView, OTPRequestView, OTPVerifyView,
+    AdminLoginView,
+    MobileLoginView, OTPVerifyView,
     ProfileView, ChangePasswordView, UpdatePhotoView,
-    ClientRegisterView, ValidateOTPView, ResendOTPView,
-    MobileLoginView
+    ClientRegisterView, ResendOTPView
 )
 
 urlpatterns = [
@@ -12,14 +12,10 @@ urlpatterns = [
     
     # ===== AUTHENTIFICATION MOBILE (AGENT + CLIENT) =====
     path('auth/login', MobileLoginView.as_view(), name='mobile-login'),
-    
-    # ===== AUTHENTIFICATION OTP =====
-    path('auth/otp/request', OTPRequestView.as_view(), name='otp-request'),
     path('auth/otp/verify', OTPVerifyView.as_view(), name='otp-verify'),
     
     # ===== INSCRIPTION CLIENT (MOBILE) =====
     path('auth/register', ClientRegisterView.as_view(), name='client-register'),
-    path('auth/validate-otp', ValidateOTPView.as_view(), name='validate-otp'),
     path('auth/resend-otp', ResendOTPView.as_view(), name='resend-otp'),
     
     # ===== PROFIL =====
