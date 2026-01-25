@@ -5,10 +5,13 @@ from .views import (
     TricycleViewSet,
     
     # Agents
-    AgentListView, AgentCreateView, AgentDetailView,
+    AgentListCreateView,
+    AgentDetailView,
+    AgentChangePasswordView,
     
     # Clients
-    ClientListView, ClientCreateView, ClientDetailView,
+    ClientListCreateView,
+    ClientDetailView,
 )
 
 # Router pour les ViewSets
@@ -16,16 +19,23 @@ router = DefaultRouter()
 router.register(r'tricycles', TricycleViewSet, basename='tricycle')
 
 urlpatterns = [
-    # Router URLs
+    # Router URLs (pour les tricycles)
     path('', include(router.urls)),
     
-    # ===== AGENTS =====
-    path('admin/agents', AgentListView.as_view(), name='agent-list'),
-    path('admin/agents/create', AgentCreateView.as_view(), name='agent-create'),
+    # ==================== AGENTS ====================
+    # GET: Liste agents | POST: Créer agent
+    path('admin/agents', AgentListCreateView.as_view(), name='agent-list-create'),
+    
+    # GET: Détail agent | PUT/PATCH: Modifier agent | DELETE: Supprimer agent
     path('admin/agents/<int:pk>', AgentDetailView.as_view(), name='agent-detail'),
     
-    # ===== CLIENTS =====
-    path('admin/clients', ClientListView.as_view(), name='client-list'),
-    path('admin/clients/create', ClientCreateView.as_view(), name='client-create'),
+    # POST: Changer mot de passe agent
+    path('admin/agents/<int:pk>/change-password', AgentChangePasswordView.as_view(), name='agent-change-password'),
+    
+    # ==================== CLIENTS ====================
+    # GET: Liste clients | POST: Créer client
+    path('admin/clients', ClientListCreateView.as_view(), name='client-list-create'),
+    
+    # GET: Détail client | PUT/PATCH: Modifier client | DELETE: Supprimer client
     path('admin/clients/<int:pk>', ClientDetailView.as_view(), name='client-detail'),
 ]

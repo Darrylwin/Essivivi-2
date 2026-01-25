@@ -6,6 +6,6 @@ from .views import (
 urlpatterns = [
     # Gestion des livraisons
     path('deliveries', LivraisonListView.as_view(), name='delivery-list'),
-    path('deliveries/create', LivraisonCreateView.as_view(), name='delivery-create'),
+    path('deliveries', LivraisonCreateView.as_view(), name='delivery-create'),
     path('deliveries/<int:pk>', LivraisonDetailView.as_view(), name='delivery-detail'),
 ]

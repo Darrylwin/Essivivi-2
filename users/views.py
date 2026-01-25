@@ -1,22 +1,22 @@
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.shortcuts import get_object_or_404
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 import logging
 
-from authentication.models import Admin, Agent, Client, Tricycle
+from authentication.models import Agent, Client, Tricycle
 from .serializers import (
-    AgentCreateSerializer, AgentUpdateSerializer, AgentListSerializer, 
-    AgentDetailSerializer,
+    AgentCreateSerializer, AgentUpdateSerializer, AgentListSerializer,
+    AgentDetailSerializer, AgentChangePasswordSerializer,
     ClientCreateSerializer, ClientUpdateSerializer, ClientListSerializer,
     ClientDetailSerializer,
     TricycleSerializer
 )
-from .permissions import IsAdmin, IsAdminOrReadOnly
+from .permissions import IsAdmin
 
 logger = logging.getLogger('users')
 
@@ -24,291 +24,399 @@ logger = logging.getLogger('users')
 # ==================== TRICYCLES ====================
 
 class TricycleViewSet(viewsets.ModelViewSet):
-    """ViewSet pour gérer les tricycles"""
+    """
+    ViewSet pour gérer les tricycles
+    
+    list: Liste tous les tricycles
+    create: Crée un nouveau tricycle
+    retrieve: Récupère un tricycle spécifique
+    update: Modifie un tricycle
+    destroy: Supprime un tricycle
+    """
     queryset = Tricycle.objects.all()
     serializer_class = TricycleSerializer
     permission_classes = [IsAuthenticated, IsAdmin]
     
-    def list(self, request):
-        logger.info("Récupération de la liste des tricycles")
-        tricycles = self.get_queryset()
-        serializer = self.get_serializer(tricycles, many=True)
-        logger.info(f"{tricycles.count()} tricycles récupérés")
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    def perform_create(self, serializer):
+        tricycle = serializer.save()
+        logger.info(f"Tricycle créé : {tricycle.plaque_immatriculation}")
     
-    def create(self, request):
-        logger.info("Création d'un nouveau tricycle")
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        logger.info(f"Tricycle créé : {serializer.data['plaque_immatriculation']}")
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    def perform_update(self, serializer):
+        tricycle = serializer.save()
+        logger.info(f"Tricycle mis à jour : {tricycle.plaque_immatriculation}")
     
-    def retrieve(self, request, pk=None):
-        logger.info(f"Récupération du tricycle ID {pk}")
-        tricycle = get_object_or_404(Tricycle, pk=pk)
-        serializer = self.get_serializer(tricycle)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
-    def update(self, request, pk=None):
-        logger.info(f"Mise à jour du tricycle ID {pk}")
-        tricycle = get_object_or_404(Tricycle, pk=pk)
-        serializer = self.get_serializer(tricycle, data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        logger.info(f"Tricycle mis à jour : {serializer.data['plaque_immatriculation']}")
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
-    def destroy(self, request, pk=None):
-        logger.info(f"Suppression du tricycle ID {pk}")
-        tricycle = get_object_or_404(Tricycle, pk=pk)
-        plaque = tricycle.plaque_immatriculation
-        tricycle.delete()
+    def perform_destroy(self, instance):
+        plaque = instance.plaque_immatriculation
+        instance.delete()
         logger.info(f"Tricycle supprimé : {plaque}")
-        return Response(
-            {"message": "Tricycle supprimé avec succès"},
-            status=status.HTTP_204_NO_CONTENT
-        )
+
 
 # ==================== AGENTS ====================
 
-class AgentListView(APIView):
-    """Lister tous les agents"""
+class AgentListCreateView(APIView):
+    """
+    GET: Liste tous les agents avec filtres optionnels
+    POST: Crée un nouvel agent
+    """
     permission_classes = [IsAuthenticated, IsAdmin]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     @swagger_auto_schema(
+        operation_description="Liste tous les agents avec filtres optionnels",
         manual_parameters=[
-            openapi.Parameter('statut', openapi.IN_QUERY, description="Filtrer par statut", type=openapi.TYPE_STRING),
-            openapi.Parameter('search', openapi.IN_QUERY, description="Rechercher par nom, email ou numéro", type=openapi.TYPE_STRING),
+            openapi.Parameter(
+                'statut',
+                openapi.IN_QUERY,
+                description="Filtrer par statut (actif, inactif, en tournée)",
+                type=openapi.TYPE_STRING,
+                enum=['actif', 'inactif', 'en tournée']
+            ),
+            openapi.Parameter(
+                'search',
+                openapi.IN_QUERY,
+                description="Rechercher par nom, prénom, email ou numéro d'identification",
+                type=openapi.TYPE_STRING
+            ),
         ],
         responses={200: AgentListSerializer(many=True)}
     )
     def get(self, request):
+        """Liste tous les agents"""
         logger.info("Récupération de la liste des agents")
         
-        agents = Agent.objects.all().order_by('-created_at')
+        agents = Agent.objects.all().select_related('tricycle').order_by('-created_at')
         
-        # Filtrer par statut
-        statut = request.query_params.get('statut', None)
+        # Filtre par statut
+        statut = request.query_params.get('statut')
         if statut:
             agents = agents.filter(statut=statut)
-            logger.info(f"Filtre appliqué : statut={statut}")
+            logger.info(f"Filtre statut appliqué : {statut}")
         
         # Recherche
-        search = request.query_params.get('search', None)
+        search = request.query_params.get('search')
         if search:
+            from django.db.models import Q
             agents = agents.filter(
-                nom__icontains=search
-            ) | agents.filter(
-                prenom__icontains=search
-            ) | agents.filter(
-                email__icontains=search
-            ) | agents.filter(
-                numero_identification__icontains=search
+                Q(nom__icontains=search) |
+                Q(prenom__icontains=search) |
+                Q(email__icontains=search) |
+                Q(numero_identification__icontains=search) |
+                Q(telephone__icontains=search)
             )
             logger.info(f"Recherche appliquée : {search}")
         
         serializer = AgentListSerializer(agents, many=True)
-        logger.info(f"{agents.count()} agents récupérés")
+        logger.info(f"{agents.count()} agents trouvés")
         
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-class AgentCreateView(APIView):
-    """Créer un agent"""
-    permission_classes = [IsAuthenticated, IsAdmin]
+        return Response({
+            'count': agents.count(),
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
+        operation_description="Crée un nouvel agent. Si mot_de_passe n'est pas fourni, il sera généré automatiquement.",
         request_body=AgentCreateSerializer,
         responses={
             201: openapi.Response(
                 description="Agent créé avec succès",
                 examples={
                     "application/json": {
+                        "message": "Agent créé avec succès",
                         "agent": {
                             "id": 1,
-                            "numero_identification": "AGT-123456",
+                            "numero_identification": "AGT-000001",
                             "nom": "Doe",
                             "prenom": "John",
-                            "email": "john.doe@example.com",
-                            "statut": "actif"
+                            "email": "john@example.com"
                         },
-                        "mot_de_passe_genere": "X7k9mP2qL5",
-                        "message": "Agent créé avec succès. Conservez le mot de passe généré."
+                        "mot_de_passe_genere": "Abc123XyZ456"
                     }
                 }
-            ),
-            400: "Erreur de validation"
+            )
         }
     )
     def post(self, request):
-        logger.info("Demande de création d'agent")
+        """Crée un nouvel agent"""
+        logger.info("Création d'un nouvel agent")
+        
         serializer = AgentCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         agent = serializer.save()
         
-        # Construire la réponse
         response_data = {
-            "agent": AgentDetailSerializer(agent).data
+            'message': 'Agent créé avec succès',
+            'agent': AgentDetailSerializer(agent).data
         }
         
         # Ajouter le mot de passe généré s'il existe
-        if hasattr(agent, 'mot_de_passe_genere'):
-            response_data['mot_de_passe_genere'] = agent.mot_de_passe_genere
-            response_data['message'] = "Agent créé avec succès. Conservez le mot de passe généré en lieu sûr."
-            logger.warning(f"Mot de passe généré pour l'agent {agent.numero_identification}")
-        else:
-            response_data['message'] = "Agent créé avec succès."
+        if hasattr(agent, '_mot_de_passe_genere'):
+            response_data['mot_de_passe_genere'] = agent._mot_de_passe_genere
+            response_data['message'] = 'Agent créé avec succès. Conservez le mot de passe généré en lieu sûr.'
         
-        return Response(
-            response_data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
 
 class AgentDetailView(APIView):
-    """Récupérer, modifier ou supprimer un agent"""
+    """
+    GET: Récupère un agent spécifique
+    PUT/PATCH: Modifie un agent
+    DELETE: Supprime un agent
+    """
     permission_classes = [IsAuthenticated, IsAdmin]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
-    @swagger_auto_schema(responses={200: AgentDetailSerializer()})
+    @swagger_auto_schema(
+        operation_description="Récupère les détails d'un agent",
+        responses={200: AgentDetailSerializer()}
+    )
     def get(self, request, pk):
-        logger.info(f"Récupération de l'agent ID {pk}")
-        agent = get_object_or_404(Agent, pk=pk)
+        """Récupère un agent"""
+        logger.info(f"Récupération agent ID {pk}")
+        agent = get_object_or_404(Agent.objects.select_related('tricycle'), pk=pk)
         serializer = AgentDetailSerializer(agent)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
+        operation_description="Modifie un agent (tous les champs sont optionnels)",
         request_body=AgentUpdateSerializer,
         responses={200: AgentDetailSerializer()}
     )
     def put(self, request, pk):
-        logger.info(f"Mise à jour de l'agent ID {pk}")
+        """Modifie un agent (PUT = modification complète)"""
+        logger.info(f"Modification complète agent ID {pk}")
         agent = get_object_or_404(Agent, pk=pk)
+        
+        serializer = AgentUpdateSerializer(agent, data=request.data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        agent = serializer.save()
+        
+        return Response({
+            'message': 'Agent mis à jour avec succès',
+            'agent': AgentDetailSerializer(agent).data
+        }, status=status.HTTP_200_OK)
+    
+    @swagger_auto_schema(
+        operation_description="Modifie partiellement un agent",
+        request_body=AgentUpdateSerializer,
+        responses={200: AgentDetailSerializer()}
+    )
+    def patch(self, request, pk):
+        """Modifie partiellement un agent (PATCH = modification partielle)"""
+        logger.info(f"Modification partielle agent ID {pk}")
+        agent = get_object_or_404(Agent, pk=pk)
+        
         serializer = AgentUpdateSerializer(agent, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         agent = serializer.save()
         
-        return Response(
-            AgentDetailSerializer(agent).data,
-            status=status.HTTP_200_OK
-        )
+        return Response({
+            'message': 'Agent mis à jour avec succès',
+            'agent': AgentDetailSerializer(agent).data
+        }, status=status.HTTP_200_OK)
     
+    @swagger_auto_schema(
+        operation_description="Supprime un agent",
+        responses={204: "Agent supprimé avec succès"}
+    )
     def delete(self, request, pk):
-        logger.info(f"Suppression de l'agent ID {pk}")
+        """Supprime un agent"""
+        logger.info(f"Suppression agent ID {pk}")
         agent = get_object_or_404(Agent, pk=pk)
         numero = agent.numero_identification
         agent.delete()
         logger.info(f"Agent supprimé : {numero}")
         
-        return Response(
-            {"message": "Agent supprimé avec succès"},
-            status=status.HTTP_204_NO_CONTENT
-        )
+        return Response({
+            'message': 'Agent supprimé avec succès'
+        }, status=status.HTTP_200_OK)
+
+
+class AgentChangePasswordView(APIView):
+    """Change le mot de passe d'un agent (ADMIN)"""
+    permission_classes = [IsAuthenticated, IsAdmin]
+    
+    @swagger_auto_schema(
+        operation_description="Change le mot de passe d'un agent",
+        request_body=AgentChangePasswordSerializer,
+        responses={200: "Mot de passe modifié avec succès"}
+    )
+    def post(self, request, pk):
+        """Change le mot de passe"""
+        logger.info(f"Changement mot de passe agent ID {pk}")
+        agent = get_object_or_404(Agent, pk=pk)
+        
+        serializer = AgentChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(agent)
+        
+        return Response({
+            'message': 'Mot de passe modifié avec succès'
+        }, status=status.HTTP_200_OK)
+
 
 # ==================== CLIENTS ====================
 
-class ClientListView(APIView):
-    """Lister tous les clients"""
-    permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
+class ClientListCreateView(APIView):
+    """
+    GET: Liste tous les clients avec filtres optionnels
+    POST: Crée un nouveau client
+    """
+    permission_classes = [IsAuthenticated, IsAdmin]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     @swagger_auto_schema(
+        operation_description="Liste tous les clients avec filtres optionnels",
         manual_parameters=[
-            openapi.Parameter('type_client', openapi.IN_QUERY, description="Filtrer par type", type=openapi.TYPE_STRING),
-            openapi.Parameter('statut', openapi.IN_QUERY, description="Filtrer par statut", type=openapi.TYPE_STRING),
-            openapi.Parameter('search', openapi.IN_QUERY, description="Rechercher par nom ou code", type=openapi.TYPE_STRING),
+            openapi.Parameter(
+                'type_client',
+                openapi.IN_QUERY,
+                description="Filtrer par type (détaillant, grossiste, institution)",
+                type=openapi.TYPE_STRING,
+                enum=['détaillant', 'grossiste', 'institution']
+            ),
+            openapi.Parameter(
+                'statut',
+                openapi.IN_QUERY,
+                description="Filtrer par statut (actif, inactif)",
+                type=openapi.TYPE_STRING,
+                enum=['actif', 'inactif']
+            ),
+            openapi.Parameter(
+                'search',
+                openapi.IN_QUERY,
+                description="Rechercher par nom du point de vente, nom du responsable ou code client",
+                type=openapi.TYPE_STRING
+            ),
         ],
         responses={200: ClientListSerializer(many=True)}
     )
     def get(self, request):
+        """Liste tous les clients"""
         logger.info("Récupération de la liste des clients")
         
         clients = Client.objects.all().order_by('-created_at')
         
-        # Filtrer par type
-        type_client = request.query_params.get('type_client', None)
+        # Filtre par type
+        type_client = request.query_params.get('type_client')
         if type_client:
             clients = clients.filter(type_client=type_client)
-            logger.info(f"Filtre appliqué : type_client={type_client}")
+            logger.info(f"Filtre type_client appliqué : {type_client}")
         
-        # Filtrer par statut
-        statut = request.query_params.get('statut', None)
+        # Filtre par statut
+        statut = request.query_params.get('statut')
         if statut:
             clients = clients.filter(statut=statut)
-            logger.info(f"Filtre appliqué : statut={statut}")
+            logger.info(f"Filtre statut appliqué : {statut}")
         
         # Recherche
-        search = request.query_params.get('search', None)
+        search = request.query_params.get('search')
         if search:
+            from django.db.models import Q
             clients = clients.filter(
-                nom_point_vente__icontains=search
-            ) | clients.filter(
-                nom_responsable__icontains=search
-            ) | clients.filter(
-                code_client__icontains=search
+                Q(nom_point_vente__icontains=search) |
+                Q(nom_responsable__icontains=search) |
+                Q(code_client__icontains=search) |
+                Q(telephone__icontains=search)
             )
             logger.info(f"Recherche appliquée : {search}")
         
         serializer = ClientListSerializer(clients, many=True)
-        logger.info(f"{clients.count()} clients récupérés")
+        logger.info(f"{clients.count()} clients trouvés")
         
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class ClientCreateView(APIView):
-    """Créer un client"""
-    permission_classes = [IsAuthenticated]
+        return Response({
+            'count': clients.count(),
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
+        operation_description="Crée un nouveau client",
         request_body=ClientCreateSerializer,
         responses={201: ClientDetailSerializer()}
     )
     def post(self, request):
-        logger.info("Demande de création de client")
+        """Crée un nouveau client"""
+        logger.info("Création d'un nouveau client")
+        
         serializer = ClientCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         client = serializer.save()
         
-        return Response(
-            ClientDetailSerializer(client).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response({
+            'message': 'Client créé avec succès',
+            'client': ClientDetailSerializer(client).data
+        }, status=status.HTTP_201_CREATED)
 
 
 class ClientDetailView(APIView):
-    """Récupérer, modifier ou supprimer un client"""
-    permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
+    """
+    GET: Récupère un client spécifique
+    PUT/PATCH: Modifie un client
+    DELETE: Supprime un client
+    """
+    permission_classes = [IsAuthenticated, IsAdmin]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
-    @swagger_auto_schema(responses={200: ClientDetailSerializer()})
+    @swagger_auto_schema(
+        operation_description="Récupère les détails d'un client",
+        responses={200: ClientDetailSerializer()}
+    )
     def get(self, request, pk):
-        logger.info(f"Récupération du client ID {pk}")
+        """Récupère un client"""
+        logger.info(f"Récupération client ID {pk}")
         client = get_object_or_404(Client, pk=pk)
         serializer = ClientDetailSerializer(client)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
+        operation_description="Modifie un client",
         request_body=ClientUpdateSerializer,
         responses={200: ClientDetailSerializer()}
     )
     def put(self, request, pk):
-        logger.info(f"Mise à jour du client ID {pk}")
+        """Modifie un client (PUT = modification complète)"""
+        logger.info(f"Modification complète client ID {pk}")
         client = get_object_or_404(Client, pk=pk)
+        
+        serializer = ClientUpdateSerializer(client, data=request.data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        client = serializer.save()
+        
+        return Response({
+            'message': 'Client mis à jour avec succès',
+            'client': ClientDetailSerializer(client).data
+        }, status=status.HTTP_200_OK)
+    
+    @swagger_auto_schema(
+        operation_description="Modifie partiellement un client",
+        request_body=ClientUpdateSerializer,
+        responses={200: ClientDetailSerializer()}
+    )
+    def patch(self, request, pk):
+        """Modifie partiellement un client (PATCH = modification partielle)"""
+        logger.info(f"Modification partielle client ID {pk}")
+        client = get_object_or_404(Client, pk=pk)
+        
         serializer = ClientUpdateSerializer(client, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         client = serializer.save()
         
-        logger.info(f"Client mis à jour : {client.code_client}")
-        
-        return Response(
-            ClientDetailSerializer(client).data,
-            status=status.HTTP_200_OK
-        )
+        return Response({
+            'message': 'Client mis à jour avec succès',
+            'client': ClientDetailSerializer(client).data
+        }, status=status.HTTP_200_OK)
     
+    @swagger_auto_schema(
+        operation_description="Supprime un client",
+        responses={204: "Client supprimé avec succès"}
+    )
     def delete(self, request, pk):
-        logger.info(f"Suppression du client ID {pk}")
+        """Supprime un client"""
+        logger.info(f"Suppression client ID {pk}")
         client = get_object_or_404(Client, pk=pk)
         code = client.code_client
         client.delete()
         logger.info(f"Client supprimé : {code}")
         
-        return Response(
-            {"message": "Client supprimé avec succès"},
-            status=status.HTTP_204_NO_CONTENT
-        )
+        return Response({
+            'message': 'Client supprimé avec succès'
+        }, status=status.HTTP_200_OK)
