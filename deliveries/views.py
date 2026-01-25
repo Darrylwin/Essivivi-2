@@ -11,8 +11,11 @@ import logging
 
 from .models import Livraison
 from authentication.models import Agent, Client
+from orders.models import Commande
 from .serializers import (
-    LivraisonCreateSerializer, LivraisonListSerializer,
+    LivraisonCreateForCommandeSerializer,
+    LivraisonCreateSansCommandeSerializer,
+    LivraisonListSerializer,
     LivraisonDetailSerializer
 )
 from .permissions import IsAgent
@@ -26,46 +29,55 @@ class LivraisonCreateView(APIView):
     """
     Créer une livraison
     
-    - Agent : Peut créer des livraisons pendant sa tournée
-    - Admin : Peut créer des livraisons manuellement (correction, rattrapage)
+    Deux scénarios :
+    1. Pour une commande assignée (commande_id requis)
+    2. Livraison directe sans commande (client info requis)
     """
-    permission_classes = [IsAuthenticated, IsAgentOrAdmin]
+    permission_classes = [IsAuthenticated, IsAgent]
     
     @swagger_auto_schema(
-        operation_description="""
-        Créer une nouvelle livraison avec plusieurs produits.
+        operation_description="""Créer une nouvelle livraison.
         
-        **Agent :** Doit être en tournée. La distance avec le client doit être ≤ 2m.
-        **Admin :** Peut créer sans contrainte de tournée ou de distance.
+        **Deux modes possibles :**
+        
+        1. **Livraison pour commande** (recommanded) :
+           - `commande_id` : ID de la commande à livrer
+           - L'agent doit être celui assigné à la commande
+           - Doit être à moins de 2m du point de livraison
+           - Met automatiquement à jour le statut de la commande
+        
+        2. **Livraison directe sans commande** :
+           - `client_id` ou informations pour créer un nouveau client
+           - Pour les ventes directes sans commande préalable
         """,
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['lignes', 'latitude', 'longitude'],
             properties={
+                'mode': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    enum=['commande', 'direct'],
+                    default='commande',
+                    description="Mode de livraison"
+                ),
+                'commande_id': openapi.Schema(
+                    type=openapi.TYPE_INTEGER,
+                    description='ID de la commande à livrer (mode=commande)'
+                ),
                 'client_id': openapi.Schema(
                     type=openapi.TYPE_INTEGER,
-                    description='ID du client existant (optionnel si nouveau client)'
+                    description='ID du client existant (mode=direct)'
                 ),
                 'nom_point_vente': openapi.Schema(
                     type=openapi.TYPE_STRING,
-                    description='Nom du point de vente (si nouveau client)'
+                    description='Nom du point de vente (nouveau client, mode=direct)'
                 ),
                 'nom_responsable': openapi.Schema(
                     type=openapi.TYPE_STRING,
-                    description='Nom du responsable (si nouveau client)'
+                    description='Nom du responsable (nouveau client, mode=direct)'
                 ),
                 'telephone': openapi.Schema(
                     type=openapi.TYPE_STRING,
-                    description='Téléphone (si nouveau client)'
-                ),
-                'adresse': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description='Adresse (si nouveau client)'
-                ),
-                'type_client': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    enum=['detaillant', 'grossiste', 'institution'],
-                    description='Type de client (si nouveau client)'
+                    description='Téléphone (nouveau client, mode=direct)'
                 ),
                 'lignes': openapi.Schema(
                     type=openapi.TYPE_ARRAY,
@@ -73,25 +85,33 @@ class LivraisonCreateView(APIView):
                         type=openapi.TYPE_OBJECT,
                         properties={
                             'produit_id': openapi.Schema(type=openapi.TYPE_INTEGER),
-                            'quantite': openapi.Schema(type=openapi.TYPE_INTEGER, minimum=1)
+                            'quantite': openapi.Schema(type=openapi.TYPE_INTEGER, minimum=1),
+                            'ligne_commande_id': openapi.Schema(
+                                type=openapi.TYPE_INTEGER,
+                                description='ID de la ligne de commande correspondante (optionnel)'
+                            )
                         }
                     ),
                     description='Liste des produits livrés'
                 ),
                 'latitude': openapi.Schema(
                     type=openapi.TYPE_NUMBER,
-                    description='Latitude GPS de la livraison'
+                    required=True,
+                    description='Latitude GPS de l\'agent au moment de la livraison'
                 ),
                 'longitude': openapi.Schema(
                     type=openapi.TYPE_NUMBER,
-                    description='Longitude GPS de la livraison'
+                    required=True,
+                    description='Longitude GPS de l\'agent au moment de la livraison'
                 ),
             },
+            required=['latitude', 'longitude'],
             example={
-                "client_id": 1,
+                "mode": "commande",
+                "commande_id": 123,
                 "lignes": [
-                    {"produit_id": 1, "quantite": 10},
-                    {"produit_id": 2, "quantite": 5}
+                    {"produit_id": 1, "quantite": 10, "ligne_commande_id": 456},
+                    {"produit_id": 2, "quantite": 5, "ligne_commande_id": 457}
                 ],
                 "latitude": 6.1319,
                 "longitude": 1.2224
@@ -99,19 +119,30 @@ class LivraisonCreateView(APIView):
         ),
         responses={
             201: LivraisonDetailSerializer(),
-            400: "Validation échouée"
+            400: "Validation échouée",
+            403: "Permission refusée"
         }
     )
     def post(self, request):
+        """Créer une livraison"""
         logger.info(f"Demande de création de livraison par {request.user.email}")
         
-        # Déterminer si c'est un admin
-        is_admin = hasattr(request.user, 'is_staff') and request.user.is_staff
+        # Déterminer le mode de livraison
+        mode = request.data.get('mode', 'commande')
         
-        serializer = LivraisonCreateSerializer(
-            data=request.data,
-            context={'request': request, 'is_admin': is_admin}
-        )
+        if mode == 'commande':
+            # Livraison pour commande existante
+            serializer = LivraisonCreateForCommandeSerializer(
+                data=request.data,
+                context={'request': request}
+            )
+        else:
+            # Livraison directe sans commande
+            serializer = LivraisonCreateSansCommandeSerializer(
+                data=request.data,
+                context={'request': request}
+            )
+        
         serializer.is_valid(raise_exception=True)
         livraison = serializer.save()
         
@@ -120,8 +151,9 @@ class LivraisonCreateView(APIView):
             status=status.HTTP_201_CREATED
         )
 
+
 class LivraisonListView(APIView):
-    """Lister les livraisons"""
+    """Lister les livraisons avec filtres"""
     permission_classes = [IsAuthenticated]
     
     @swagger_auto_schema(
@@ -129,12 +161,15 @@ class LivraisonListView(APIView):
             openapi.Parameter('date', openapi.IN_QUERY, description="Filtrer par date (YYYY-MM-DD)", type=openapi.TYPE_STRING),
             openapi.Parameter('client_id', openapi.IN_QUERY, description="Filtrer par client", type=openapi.TYPE_INTEGER),
             openapi.Parameter('agent_id', openapi.IN_QUERY, description="Filtrer par agent", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('commande_id', openapi.IN_QUERY, description="Filtrer par commande", type=openapi.TYPE_INTEGER),
             openapi.Parameter('search', openapi.IN_QUERY, description="Rechercher par nom client ou code", type=openapi.TYPE_STRING),
+            openapi.Parameter('mode', openapi.IN_QUERY, description="Filtrer par mode (commande/direct)", type=openapi.TYPE_STRING, enum=['commande', 'direct']),
         ],
         responses={200: LivraisonListSerializer(many=True)}
     )
     def get(self, request):
-        logger.info("Récupération de la liste des livraisons")
+        """Lister les livraisons"""
+        logger.info(f"Récupération liste livraisons par {request.user.email}")
         
         # Déterminer le type d'utilisateur
         is_admin = hasattr(request.user, 'is_staff') and request.user.is_staff
@@ -170,7 +205,7 @@ class LivraisonListView(APIView):
         
         # Filtrer par client (admin/agent uniquement)
         client_id = request.query_params.get('client_id', None)
-        if client_id and is_admin:
+        if client_id and (is_admin or request.user.email == Agent.objects.filter(id=client_id).first().email):
             livraisons = livraisons.filter(client_id=client_id)
             logger.info(f"Filtre client_id appliqué : {client_id}")
         
@@ -180,20 +215,41 @@ class LivraisonListView(APIView):
             livraisons = livraisons.filter(agent_id=agent_id)
             logger.info(f"Filtre agent_id appliqué : {agent_id}")
         
+        # Filtrer par commande
+        commande_id = request.query_params.get('commande_id', None)
+        if commande_id:
+            livraisons = livraisons.filter(commande_id=commande_id)
+            logger.info(f"Filtre commande_id appliqué : {commande_id}")
+        
+        # Filtrer par mode
+        mode = request.query_params.get('mode', None)
+        if mode == 'commande':
+            livraisons = livraisons.filter(commande__isnull=False)
+            logger.info(f"Filtre mode appliqué : livraisons avec commande")
+        elif mode == 'direct':
+            livraisons = livraisons.filter(commande__isnull=True)
+            logger.info(f"Filtre mode appliqué : livraisons sans commande")
+        
         # Recherche
         search = request.query_params.get('search', None)
         if search:
             livraisons = livraisons.filter(
                 Q(client__nom_point_vente__icontains=search) |
                 Q(client__code_client__icontains=search) |
-                Q(client__nom_responsable__icontains=search)
+                Q(client__nom_responsable__icontains=search) |
+                Q(agent__numero_identification__icontains=search) |
+                Q(agent__nom__icontains=search) |
+                Q(agent__prenom__icontains=search)
             )
             logger.info(f"Recherche appliquée : {search}")
         
         serializer = LivraisonListSerializer(livraisons, many=True)
         logger.info(f"{livraisons.count()} livraisons récupérées")
         
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({
+            'count': livraisons.count(),
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
 
 
 class LivraisonDetailView(APIView):
@@ -202,34 +258,27 @@ class LivraisonDetailView(APIView):
     
     @swagger_auto_schema(responses={200: LivraisonDetailSerializer()})
     def get(self, request, pk):
+        """Détails d'une livraison"""
         logger.info(f"Récupération de la livraison ID {pk}")
-        livraison = get_object_or_404(Livraison, pk=pk)
+        livraison = get_object_or_404(Livraison.objects.select_related(
+            'agent', 'client', 'commande', 'tournee'
+        ), pk=pk)
         
         # Vérifier les permissions
         is_admin = hasattr(request.user, 'is_staff') and request.user.is_staff
         
         if not is_admin:
-            # Vérifier que l'agent ne consulte que ses livraisons
             try:
                 agent = Agent.objects.get(email=request.user.email)
                 if livraison.agent != agent:
-                    logger.warning(
-                        f"Agent {agent.numero_identification} tente d'accéder "
-                        f"à une livraison d'un autre agent"
-                    )
                     return Response(
                         {"error": "Vous ne pouvez consulter que vos propres livraisons"},
                         status=status.HTTP_403_FORBIDDEN
                     )
             except Agent.DoesNotExist:
-                # Vérifier que le client ne consulte que ses livraisons
                 try:
                     client = Client.objects.get(email=request.user.email)
                     if livraison.client != client:
-                        logger.warning(
-                            f"Client {client.code_client} tente d'accéder "
-                            f"à une livraison d'un autre client"
-                        )
                         return Response(
                             {"error": "Vous ne pouvez consulter que vos propres livraisons"},
                             status=status.HTTP_403_FORBIDDEN
@@ -244,7 +293,7 @@ class LivraisonDetailView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
-        responses={204: "Livraison supprimée avec succès"}
+        responses={200: "Livraison supprimée avec succès"}
     )
     def delete(self, request, pk):
         """Supprimer une livraison (Admin uniquement)"""
@@ -259,6 +308,15 @@ class LivraisonDetailView(APIView):
         logger.info(f"Suppression de la livraison ID {pk}")
         livraison = get_object_or_404(Livraison, pk=pk)
         
+        # Si c'est une livraison pour commande, réinitialiser le statut de la commande
+        if livraison.commande:
+            commande = livraison.commande
+            old_statut = commande.statut
+            commande.statut = 'acceptee'  # Revenir au statut précédent
+            commande.save()
+            logger.info(f"Statut commande #{commande.id} réinitialisé : {old_statut} → {commande.statut}")
+        
+        # Supprimer la livraison
         livraison_info = (
             f"#{livraison.id} - Agent {livraison.agent.numero_identification} "
             f"→ Client {livraison.client.code_client}"
@@ -269,5 +327,71 @@ class LivraisonDetailView(APIView):
         
         return Response(
             {"message": "Livraison supprimée avec succès"},
-            status=status.HTTP_204_NO_CONTENT
+            status=status.HTTP_200_OK
         )
+
+
+class LivraisonsCommandesEnCoursView(APIView):
+    """Liste des commandes assignées à l'agent et en attente de livraison"""
+    permission_classes = [IsAuthenticated, IsAgent]
+    
+    @swagger_auto_schema(
+        operation_description="Liste des commandes assignées à l'agent et en attente de livraison",
+        responses={200: "Liste des commandes"}
+    )
+    def get(self, request):
+        """Commandes en attente de livraison pour l'agent connecté"""
+        logger.info(f"Récupération commandes en cours pour {request.user.email}")
+        
+        # Récupérer l'agent connecté
+        try:
+            agent = Agent.objects.get(email=request.user.email)
+        except Agent.DoesNotExist:
+            return Response(
+                {"error": "Utilisateur non autorisé"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Récupérer les commandes assignées à cet agent et en attente de livraison
+        commandes = Commande.objects.filter(
+            agent=agent,
+            statut__in=['acceptee', 'en_cours']
+        ).select_related('client').prefetch_related('lignes')
+        
+        # Formater la réponse
+        result = []
+        for commande in commandes:
+            result.append({
+                'id': commande.id,
+                'client': {
+                    'id': commande.client.id,
+                    'code': commande.client.code_client,
+                    'nom': commande.client.nom_point_vente,
+                    'telephone': commande.client.telephone
+                },
+                'latitude_livraison': float(commande.latitude_livraison),
+                'longitude_livraison': float(commande.longitude_livraison),
+                'adresse_textuelle': commande.adresse_textuelle,
+                'statut': commande.statut,
+                'created_at': commande.created_at,
+                'lignes': [
+                    {
+                        'id': ligne.id,
+                        'produit_id': ligne.produit_id,
+                        'produit_nom': ligne.produit.nom,
+                        'quantite': ligne.quantite,
+                        'prix_unitaire': float(ligne.prix_unitaire),
+                        'montant': float(ligne.montant)
+                    }
+                    for ligne in commande.lignes.all()
+                ],
+                'quantite_totale': commande.quantite_totale,
+                'montant_total': float(commande.montant_total)
+            })
+        
+        logger.info(f"{len(result)} commandes en attente de livraison pour l'agent {agent.numero_identification}")
+        
+        return Response({
+            'count': len(result),
+            'results': result
+        }, status=status.HTTP_200_OK)

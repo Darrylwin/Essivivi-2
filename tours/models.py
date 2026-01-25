@@ -13,7 +13,6 @@ class Tournee(models.Model):
     )
     heure_debut = models.DateTimeField(verbose_name='Heure de début')
     heure_fin = models.DateTimeField(null=True, blank=True, verbose_name='Heure de fin')
-    duree = models.DurationField(null=True, blank=True, verbose_name='Durée')
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -25,29 +24,9 @@ class Tournee(models.Model):
         ordering = ['-heure_debut']
     
     def __str__(self):
-        return f"Tournée de {self.agent.numero_identification} - {self.heure_debut.strftime('%Y-%m-%d %H:%M')}"
-    
-    def calculer_duree(self):
-        """Calcule la durée de la tournée"""
-        if self.heure_fin and self.heure_debut:
-            self.duree = self.heure_fin - self.heure_debut
-            self.save()
-        return self.duree
+        return f"Tournée #{self.id} - Agent {self.agent.numero_identification}"
     
     @property
     def est_terminee(self):
         """Vérifie si la tournée est terminée"""
         return self.heure_fin is not None
-    
-    @property
-    def duree_formatee(self):
-        """Retourne la durée sous forme lisible (ex: 1h 23m 45s)"""
-        duree = self.duree or self.calculer_duree()
-        if not duree:
-            return "-"
-        
-        total_seconds = int(duree.total_seconds())
-        hours, remainder = divmod(total_seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        
-        return f"{hours}h {minutes}m {seconds}s"

@@ -8,21 +8,12 @@ logger = logging.getLogger('tours')
 
 
 class TourneeSerializer(serializers.ModelSerializer):
-    """Serializer pour les tournées"""
-    agent_numero = serializers.CharField(source='agent.numero_identification', read_only=True)
-    agent_nom = serializers.CharField(source='agent.nom', read_only=True)
-    agent_prenom = serializers.CharField(source='agent.prenom', read_only=True)
-    duree_formatee = serializers.CharField(read_only=True)  # Maintenant une @property
-    est_terminee = serializers.BooleanField(read_only=True)
+    """Serializer minimal pour les tournées"""
     
     class Meta:
         model = Tournee
-        fields = [
-            'id', 'agent', 'agent_numero', 'agent_nom', 'agent_prenom',
-            'heure_debut', 'heure_fin', 'duree', 'duree_formatee',
-            'est_terminee', 'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'duree']
+        fields = ['id', 'agent', 'heure_debut', 'heure_fin', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
 
 class TourneeDetailSerializer(serializers.ModelSerializer):
@@ -65,15 +56,3 @@ class TourneeDetailSerializer(serializers.ModelSerializer):
         from decimal import Decimal
         total = sum(livraison.montant_total for livraison in obj.livraisons.all())
         return float(total) if total > 0 else 0.0
-
-
-class TourneeStartSerializer(serializers.Serializer):
-    """Serializer pour démarrer une tournée"""
-    # Pas de champs requis, tout est automatique
-    pass
-
-
-class TourneeEndSerializer(serializers.Serializer):
-    """Serializer pour terminer une tournée"""
-    # Pas de champs requis, tout est automatique
-    pass

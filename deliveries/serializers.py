@@ -6,6 +6,7 @@ from products.serializers import ProduitListSerializer
 from products.models import Produit
 from authentication.models import Agent, Client
 from tours.models import Tournee
+from orders.models import Commande, LigneCommande
 import logging
 
 logger = logging.getLogger('deliveries')
@@ -14,12 +15,13 @@ logger = logging.getLogger('deliveries')
 class LigneLivraisonSerializer(serializers.ModelSerializer):
     """Serializer pour les lignes de livraison"""
     produit_detail = ProduitListSerializer(source='produit', read_only=True)
+    ligne_commande_id = serializers.IntegerField(source='ligne_commande.id', read_only=True, allow_null=True)
     
     class Meta:
         model = LigneLivraison
         fields = [
-            'id', 'produit', 'produit_detail', 'quantite',
-            'prix_unitaire', 'montant', 'created_at'
+            'id', 'produit', 'produit_detail', 'ligne_commande', 'ligne_commande_id',
+            'quantite', 'prix_unitaire', 'montant', 'created_at'
         ]
         read_only_fields = ['id', 'montant', 'created_at']
 
@@ -28,6 +30,11 @@ class LigneLivraisonCreateSerializer(serializers.Serializer):
     """Serializer pour créer une ligne de livraison"""
     produit_id = serializers.IntegerField()
     quantite = serializers.IntegerField(min_value=1)
+    ligne_commande_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="ID de la ligne de commande correspondante (si livraison pour commande)"
+    )
     
     def validate_produit_id(self, value):
         """Vérifier que le produit existe et est actif"""
@@ -38,6 +45,15 @@ class LigneLivraisonCreateSerializer(serializers.Serializer):
         except Produit.DoesNotExist:
             raise serializers.ValidationError("Produit non trouvé")
         return value
+    
+    def validate_ligne_commande_id(self, value):
+        """Vérifier que la ligne de commande existe"""
+        if value:
+            try:
+                LigneCommande.objects.get(id=value)
+            except LigneCommande.DoesNotExist:
+                raise serializers.ValidationError("Ligne de commande non trouvée")
+        return value
 
 
 class LivraisonListSerializer(serializers.ModelSerializer):
@@ -47,6 +63,7 @@ class LivraisonListSerializer(serializers.ModelSerializer):
     agent_prenom = serializers.CharField(source='agent.prenom', read_only=True)
     client_code = serializers.CharField(source='client.code_client', read_only=True)
     client_nom = serializers.CharField(source='client.nom_point_vente', read_only=True)
+    commande_id = serializers.IntegerField(source='commande.id', read_only=True, allow_null=True)
     montant_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     quantite_totale = serializers.IntegerField(read_only=True)
     
@@ -55,6 +72,7 @@ class LivraisonListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'agent', 'agent_numero', 'agent_nom', 'agent_prenom',
             'client', 'client_code', 'client_nom',
+            'commande', 'commande_id',
             'quantite_totale', 'montant_total',
             'date_livraison', 'heure_livraison', 'statut',
             'created_at'
@@ -75,8 +93,10 @@ class LivraisonDetailSerializer(serializers.ModelSerializer):
     client_telephone = serializers.CharField(source='client.telephone', read_only=True)
     client_adresse = serializers.CharField(source='client.adresse', read_only=True)
     
+    commande_id = serializers.IntegerField(source='commande.id', read_only=True, allow_null=True)
     tournee_id = serializers.IntegerField(source='tournee.id', read_only=True, allow_null=True)
     distance_client = serializers.FloatField(read_only=True)
+    distance_commande = serializers.FloatField(read_only=True)
     
     lignes = LigneLivraisonSerializer(many=True, read_only=True)
     montant_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -88,8 +108,9 @@ class LivraisonDetailSerializer(serializers.ModelSerializer):
             'id', 'agent', 'agent_numero', 'agent_nom', 'agent_prenom', 'agent_telephone',
             'client', 'client_code', 'client_nom', 'client_responsable',
             'client_telephone', 'client_adresse',
+            'commande', 'commande_id',
             'tournee', 'tournee_id',
-            'latitude', 'longitude', 'distance_client',
+            'latitude', 'longitude', 'distance_client', 'distance_commande',
             'lignes', 'quantite_totale', 'montant_total',
             'date_livraison', 'heure_livraison', 'duree_livraison',
             'statut', 'created_at', 'updated_at'
@@ -97,11 +118,225 @@ class LivraisonDetailSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
-class LivraisonCreateSerializer(serializers.Serializer):
+class LivraisonCreateForCommandeSerializer(serializers.Serializer):
     """
-    Serializer pour créer une livraison avec lignes de produits
+    Serializer pour créer une livraison POUR UNE COMMANDE EXISTANTE
+    (Scénario principal : agent livrant une commande assignée)
+    """
     
-    Peut créer un nouveau client OU utiliser un client existant
+    commande_id = serializers.IntegerField(
+        required=True,
+        help_text="ID de la commande à livrer"
+    )
+    
+    # Coordonnées GPS de la livraison (position de l'agent)
+    latitude = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=8,
+        required=True,
+        min_value=-90,
+        max_value=90,
+        help_text="Latitude GPS de l'agent au moment de la livraison"
+    )
+    longitude = serializers.DecimalField(
+        max_digits=11,
+        decimal_places=8,
+        required=True,
+        min_value=-180,
+        max_value=180,
+        help_text="Longitude GPS de l'agent au moment de la livraison"
+    )
+    
+    # Lignes de livraison (doivent correspondre aux lignes de commande)
+    lignes = LigneLivraisonCreateSerializer(
+        many=True,
+        required=False,
+        help_text="Lignes de livraison. Si non fourni, utilise les lignes de la commande"
+    )
+    
+    def validate(self, data):
+        """Validation personnalisée pour la livraison de commande"""
+        commande_id = data.get('commande_id')
+        
+        # Vérifier que la commande existe
+        try:
+            commande = Commande.objects.get(id=commande_id)
+            data['_commande'] = commande  # Stocker pour usage ultérieur
+        except Commande.DoesNotExist:
+            raise serializers.ValidationError({
+                'commande_id': "Commande non trouvée"
+            })
+        
+        # Vérifier que la commande est assignée à un agent
+        if not commande.agent:
+            raise serializers.ValidationError({
+                'commande_id': "Cette commande n'est pas assignée à un agent"
+            })
+        
+        # Vérifier le statut de la commande
+        if commande.statut not in ['acceptee', 'en_cours']:
+            raise serializers.ValidationError({
+                'commande_id': f"Cette commande ne peut pas être livrée dans son statut actuel ({commande.statut})"
+            })
+        
+        # Vérifier les coordonnées GPS
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        
+        if not latitude or not longitude:
+            raise serializers.ValidationError({
+                'latitude': "Les coordonnées GPS sont requises",
+                'longitude': "Les coordonnées GPS sont requises"
+            })
+        
+        # Valider la distance avec le point de livraison de la commande
+        distance = Livraison.calculer_distance(
+            float(latitude),
+            float(longitude),
+            float(commande.latitude_livraison),
+            float(commande.longitude_livraison)
+        )
+        
+        if distance > 2:
+            raise serializers.ValidationError({
+                'latitude': f"Vous êtes trop loin du point de livraison ({distance:.2f}m). Maximum 2m autorisé.",
+                'longitude': f"Distance du point de livraison : {distance:.2f}m"
+            })
+        
+        logger.info(f"Distance validation OK : {distance:.2f}m")
+        
+        # Valider les lignes de livraison
+        lignes_data = data.get('lignes', [])
+        if lignes_data:
+            # Valider que les produits correspondent à la commande
+            commande_produit_ids = list(commande.lignes.values_list('produit_id', flat=True))
+            livraison_produit_ids = [ligne['produit_id'] for ligne in lignes_data]
+            
+            # Vérifier que tous les produits livrés sont dans la commande
+            for produit_id in livraison_produit_ids:
+                if produit_id not in commande_produit_ids:
+                    raise serializers.ValidationError({
+                        'lignes': f"Le produit {produit_id} n'est pas dans la commande #{commande.id}"
+                    })
+        
+        return data
+    
+    def create(self, validated_data):
+        """Création de la livraison pour une commande"""
+        request = self.context.get('request')
+        
+        # ÉTAPE 1: Récupérer l'agent connecté
+        try:
+            agent = Agent.objects.get(email=request.user.email)
+        except Agent.DoesNotExist:
+            raise serializers.ValidationError("Seuls les agents peuvent effectuer des livraisons")
+        
+        # ÉTAPE 2: Vérifier que l'agent est en tournée
+        if agent.statut != 'en_tournee':
+            raise serializers.ValidationError(
+                "Vous devez être en tournée pour effectuer une livraison"
+            )
+        
+        # ÉTAPE 3: Récupérer la commande
+        commande = validated_data['_commande']
+        
+        # ÉTAPE 4: Vérifier que l'agent est bien celui assigné à la commande
+        if commande.agent != agent:
+            raise serializers.ValidationError({
+                'commande_id': f"Cette commande est assignée à l'agent {commande.agent.numero_identification}, pas à vous"
+            })
+        
+        # ÉTAPE 5: Récupérer la tournée en cours de l'agent
+        tournee = Tournee.objects.filter(
+            agent=agent,
+            heure_fin__isnull=True
+        ).first()
+        
+        if not tournee:
+            raise serializers.ValidationError(
+                "Aucune tournée en cours trouvée. Veuillez démarrer une tournée."
+            )
+        
+        # ÉTAPE 6: Créer la livraison
+        now = timezone.now()
+        livraison = Livraison.objects.create(
+            agent=agent,
+            client=commande.client,
+            commande=commande,
+            tournee=tournee,
+            latitude=validated_data['latitude'],
+            longitude=validated_data['longitude'],
+            date_livraison=now.date(),
+            heure_livraison=now.time(),
+            statut='livree'
+        )
+        
+        # ÉTAPE 7: Créer les lignes de livraison
+        lignes_data = validated_data.get('lignes', [])
+        
+        if not lignes_data:
+            # Si pas de lignes spécifiées, utiliser toutes les lignes de la commande
+            for ligne_commande in commande.lignes.all():
+                LigneLivraison.objects.create(
+                    livraison=livraison,
+                    ligne_commande=ligne_commande,
+                    produit=ligne_commande.produit,
+                    quantite=ligne_commande.quantite,
+                    prix_unitaire=ligne_commande.prix_unitaire
+                )
+        else:
+            # Si lignes spécifiées, les créer avec validation
+            for ligne_data in lignes_data:
+                ligne_commande = None
+                if ligne_data.get('ligne_commande_id'):
+                    ligne_commande = LigneCommande.objects.get(id=ligne_data['ligne_commande_id'])
+                
+                produit = Produit.objects.get(id=ligne_data['produit_id'])
+                
+                LigneLivraison.objects.create(
+                    livraison=livraison,
+                    ligne_commande=ligne_commande,
+                    produit=produit,
+                    quantite=ligne_data['quantite'],
+                    prix_unitaire=produit.prix_unitaire
+                )
+        
+        # ÉTAPE 8: Calculer et mettre à jour les totaux
+        quantite_totale = livraison.quantite_totale
+        montant_total = livraison.montant_total
+        
+        livraison.quantite_livree = quantite_totale
+        livraison.montant_percu = montant_total
+        livraison.save()
+        
+        # ÉTAPE 9: Mettre à jour le statut de la commande
+        commande.statut = 'livree'
+        commande.save()
+        
+        # ÉTAPE 10: Créer une notification pour le client
+        from orders.models import Notification
+        Notification.objects.create(
+            type='livraison_terminee',
+            client=commande.client,
+            commande=commande,
+            titre='Commande livrée',
+            message=f"Votre commande #{commande.id} a été livrée avec succès par l'agent {agent.numero_identification}"
+        )
+        
+        logger.info(
+            f"Livraison pour commande créée : #{livraison.id} - "
+            f"Commande #{commande.id} - "
+            f"Agent {agent.numero_identification} → Client {commande.client.code_client} - "
+            f"{quantite_totale} unités, {montant_total} FCFA"
+        )
+        
+        return livraison
+
+
+class LivraisonCreateSansCommandeSerializer(serializers.Serializer):
+    """
+    Serializer pour créer une livraison SANS COMMANDE
+    (Scénario secondaire : vente directe à un client sans commande préalable)
     """
     
     # Client existant OU nouveau client
@@ -150,42 +385,33 @@ class LivraisonCreateSerializer(serializers.Serializer):
         return data
     
     def create(self, validated_data):
-        """Création de la livraison avec lignes"""
+        """Création de la livraison sans commande"""
         request = self.context.get('request')
-        is_admin = self.context.get('is_admin', False)
         
         # ÉTAPE 1: Récupérer l'agent connecté
         try:
             agent = Agent.objects.get(email=request.user.email)
         except Agent.DoesNotExist:
-            # Si c'est un admin, on ne peut pas créer de livraison
-            # (il faudrait spécifier quel agent)
-            if is_admin:
-                raise serializers.ValidationError(
-                    "En tant qu'admin, vous devez spécifier un agent_id"
-                )
-            raise serializers.ValidationError("Agent non trouvé")
+            raise serializers.ValidationError("Seuls les agents peuvent effectuer des livraisons")
         
-        # ÉTAPE 2: Vérifier que l'agent est en tournée (SAUF si admin)
-        if not is_admin:
-            if agent.statut != 'en_tournee':
-                raise serializers.ValidationError(
-                    "Vous devez être en tournée pour enregistrer une livraison"
-                )
+        # ÉTAPE 2: Vérifier que l'agent est en tournée
+        if agent.statut != 'en_tournee':
+            raise serializers.ValidationError(
+                "Vous devez être en tournée pour effectuer une livraison"
+            )
         
-        # ÉTAPE 3: Récupérer la tournée en cours (SAUF si admin)
-        tournee = None
-        if not is_admin:
-            tournee = Tournee.objects.filter(
-                agent=agent,
-                heure_fin__isnull=True
-            ).first()
-            
-            if not tournee:
-                raise serializers.ValidationError(
-                    "Aucune tournée en cours trouvée. Veuillez démarrer une tournée."
-                )        
-        # ÉTAPE 4: Gérer le client (existant ou nouveau)
+        # ÉTAPE 3: Récupérer la tournée en cours
+        tournee = Tournee.objects.filter(
+            agent=agent,
+            heure_fin__isnull=True
+        ).first()
+        
+        if not tournee:
+            raise serializers.ValidationError(
+                "Aucune tournée en cours trouvée. Veuillez démarrer une tournée."
+            )
+        
+        # ÉTAPE 4: Gérer le client
         client_id = validated_data.get('client_id')
         
         if client_id:
@@ -196,7 +422,6 @@ class LivraisonCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"client_id": "Client non trouvé"})
         else:
             # Créer un nouveau client
-            # Les coordonnées GPS du nouveau client = position de l'agent lors de la livraison
             client = Client.objects.create(
                 nom_point_vente=validated_data['nom_point_vente'],
                 nom_responsable=validated_data['nom_responsable'],
@@ -210,27 +435,7 @@ class LivraisonCreateSerializer(serializers.Serializer):
             )
             logger.info(f"Nouveau client créé lors de la livraison : {client.code_client}")
         
-        # ÉTAPE 5: Valider la distance (≤ 2 mètres)
-        if client.latitude and client.longitude:
-            distance = Livraison.calculer_distance(
-                validated_data['latitude'],
-                validated_data['longitude'],
-                client.latitude,
-                client.longitude
-            )
-            logger.info(f"Distance calculée : {distance:.2f} mètres")
-            
-            if distance > 2:
-                raise serializers.ValidationError({
-                    'latitude': f"Vous êtes trop loin du client ({distance:.2f}m). Vous devez être à moins de 2 mètres pour valider la livraison."
-                })
-        else:
-            # Client sans GPS : REFUSER la livraison
-            raise serializers.ValidationError({
-                'client_id': "Ce client n'a pas de coordonnées GPS enregistrées. Impossible de valider la livraison."
-            })
-        
-        # ÉTAPE 6: Créer la livraison
+        # ÉTAPE 5: Créer la livraison (sans commande)
         now = timezone.now()
         livraison = Livraison.objects.create(
             agent=agent,
@@ -243,31 +448,29 @@ class LivraisonCreateSerializer(serializers.Serializer):
             statut='livree'
         )
         
-        # ÉTAPE 7: Créer les lignes de livraison
-        lignes_data = validated_data.pop('lignes', [])
-        quantite_totale = 0
-        montant_total = Decimal('0')
+        # ÉTAPE 6: Créer les lignes de livraison (sans lien avec commande)
+        lignes_data = validated_data['lignes']
         
         for ligne_data in lignes_data:
             produit = Produit.objects.get(id=ligne_data['produit_id'])
             
-            ligne = LigneLivraison.objects.create(
+            LigneLivraison.objects.create(
                 livraison=livraison,
                 produit=produit,
                 quantite=ligne_data['quantite'],
                 prix_unitaire=produit.prix_unitaire
             )
-            
-            quantite_totale += ligne.quantite
-            montant_total += ligne.montant
         
-        # ÉTAPE 8: Mettre à jour les totaux (optionnel car calculés via propriétés)
+        # ÉTAPE 7: Mettre à jour les totaux
+        quantite_totale = livraison.quantite_totale
+        montant_total = livraison.montant_total
+        
         livraison.quantite_livree = quantite_totale
         livraison.montant_percu = montant_total
         livraison.save()
         
         logger.info(
-            f"Livraison créée : #{livraison.id} - "
+            f"Livraison directe créée : #{livraison.id} - "
             f"Agent {agent.numero_identification} → Client {client.code_client} - "
             f"{len(lignes_data)} produit(s), {quantite_totale} unités, {montant_total} FCFA"
         )

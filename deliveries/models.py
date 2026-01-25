@@ -35,8 +35,18 @@ class Livraison(models.Model):
         null=True,
         blank=True
     )
+    # Référence à la commande
+    commande = models.ForeignKey(
+        'orders.Commande',
+        on_delete=models.CASCADE,
+        related_name='livraisons',
+        verbose_name='Commande associée',
+        null=True,
+        blank=True,
+        help_text="Commande pour laquelle cette livraison est effectuée"
+    )
     
-    # Coordonnées GPS de la livraison
+    # Coordonnées GPS de la livraison (position de l'agent)
     latitude = models.DecimalField(
         max_digits=10,
         decimal_places=8,
@@ -91,7 +101,7 @@ class Livraison(models.Model):
         ordering = ['-date_livraison', '-heure_livraison']
     
     def __str__(self):
-        return f"Livraison #{self.id} - {self.agent.numero_identification} → {self.client.code_client}"
+        return f"Livraison #{self.id} - Commande #{self.commande.id if self.commande else 'N/A'} - {self.agent.numero_identification} → {self.client.code_client}"
     
     @staticmethod
     def calculer_distance(lat1, lon1, lat2, lon2):
@@ -121,6 +131,18 @@ class Livraison(models.Model):
         return distance
     
     @property
+    def distance_commande(self):
+        """Calcule la distance entre la livraison et le point de livraison de la commande"""
+        if self.commande:
+            return self.calculer_distance(
+                self.latitude,
+                self.longitude,
+                self.commande.latitude_livraison,
+                self.commande.longitude_livraison
+            )
+        return None
+    
+    @property
     def distance_client(self):
         """Calcule la distance entre la livraison et l'adresse du client"""
         if self.client.latitude and self.client.longitude:
@@ -143,9 +165,29 @@ class Livraison(models.Model):
         """Calcule la quantité totale à partir des lignes de livraison"""
         total = sum(ligne.quantite for ligne in self.lignes.all())
         return total if total > 0 else (self.quantite_livree or 0)
+    
+    def valider_livraison_commande(self):
+        """
+        Valide que cette livraison correspond à la commande assignée
+        Retourne (valide, message_erreur)
+        """
+        if not self.commande:
+            return False, "Aucune commande associée"
+        
+        if self.commande.statut != 'acceptee' and self.commande.statut != 'en_cours':
+            return False, f"La commande n'est pas dans un statut valide pour livraison (statut: {self.commande.statut})"
+        
+        if self.commande.agent != self.agent:
+            return False, f"Cette commande est assignée à un autre agent (agent assigné: {self.commande.agent.numero_identification})"
+        
+        # Vérifier la distance avec le point de livraison de la commande
+        distance = self.distance_commande
+        if distance and distance > 2:
+            return False, f"Distance trop grande du point de livraison ({distance:.2f}m). Maximum 2m autorisé."
+        
+        return True, "Livraison valide"
 
 
-# NOUVEAU MODÈLE - AJOUTE À LA FIN DU FICHIER
 class LigneLivraison(models.Model):
     """Détail des produits livrés dans une livraison"""
     
@@ -154,6 +196,16 @@ class LigneLivraison(models.Model):
         on_delete=models.CASCADE,
         related_name='lignes',
         verbose_name='Livraison'
+    )
+    # Lien avec la ligne de commande
+    ligne_commande = models.ForeignKey(
+        'orders.LigneCommande',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lignes_livraison',
+        verbose_name='Ligne de commande source',
+        help_text='Ligne de commande correspondante (si livraison pour commande)'
     )
     produit = models.ForeignKey(
         'products.Produit',
@@ -183,7 +235,7 @@ class LigneLivraison(models.Model):
         verbose_name_plural = 'Lignes de livraison'
     
     def __str__(self):
-        return f"{self.produit.nom} × {self.quantite}"
+        return f"{self.produit.nom} × {self.quantite} (Commande: {self.ligne_commande.commande.id if self.ligne_commande else 'N/A'})"
     
     def save(self, *args, **kwargs):
         # Calculer automatiquement le montant

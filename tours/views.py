@@ -12,129 +12,102 @@ from .models import Tournee
 from authentication.models import Agent
 from .serializers import (
     TourneeSerializer, TourneeDetailSerializer,
-    TourneeStartSerializer, TourneeEndSerializer
 )
 from .permissions import IsAgent, IsAgentOrAdmin
-from users.permissions import IsAdmin
 
 logger = logging.getLogger('tours')
 
 
-# ==================== TOURNÉES ====================
-
 class TourneeStartView(APIView):
-    """Démarrer une tournée (Agent uniquement)"""
+    """Démarrer une tournée (CRITIQUE pour les livraisons)"""
     permission_classes = [IsAuthenticated, IsAgent]
     
-    @swagger_auto_schema(
-        request_body=TourneeStartSerializer,
-        responses={
-            201: TourneeDetailSerializer(),
-            400: "Agent déjà en tournée ou agent inactif"
-        }
-    )
     def post(self, request):
-        logger.info(f"Demande de démarrage de tournée pour {request.user.email}")
+        logger.info(f"Démarrage tournée pour {request.user.email}")
         
-        # Récupérer l'agent
         try:
             agent = Agent.objects.get(email=request.user.email)
         except Agent.DoesNotExist:
-            return Response(
-                {"error": "Agent non trouvé"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Vérifier que l'agent est actif
-        if agent.statut == 'inactif':
-            logger.warning(f"Tentative de démarrage par agent inactif : {agent.numero_identification}")
-            return Response(
-                {"error": "Votre compte est inactif"},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"error": "Agent non trouvé"}, status=404)
         
         # Vérifier qu'il n'a pas déjà une tournée en cours
-        tournee_en_cours = Tournee.objects.filter(
-            agent=agent,
-            heure_fin__isnull=True
-        ).first()
-        
-        if tournee_en_cours:
-            logger.warning(f"Agent {agent.numero_identification} a déjà une tournée en cours")
-            return Response(
-                {"error": "Vous avez déjà une tournée en cours"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if Tournee.objects.filter(agent=agent, heure_fin__isnull=True).exists():
+            return Response({"error": "Vous avez déjà une tournée en cours"}, status=400)
         
         # Créer la tournée
-        tournee = Tournee.objects.create(
-            agent=agent,
-            heure_debut=timezone.now()
-        )
+        tournee = Tournee.objects.create(agent=agent, heure_debut=timezone.now())
         
-        # Changer le statut de l'agent
+        # Changer le statut de l'agent (CRITIQUE pour les livraisons)
         agent.statut = 'en_tournee'
         agent.save()
         
-        logger.info(f"Tournée démarrée pour l'agent {agent.numero_identification}")
+        logger.info(f"Tournée #{tournee.id} démarrée pour agent {agent.numero_identification}")
         
-        return Response(
-            TourneeDetailSerializer(tournee).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response({
+            "message": "Tournée démarrée",
+            "tournee_id": tournee.id,
+            "heure_debut": tournee.heure_debut
+        }, status=201)
 
 
 class TourneeEndView(APIView):
-    """Terminer une tournée (Agent uniquement)"""
+    """Terminer une tournée (CRITIQUE pour débloquer l'agent)"""
     permission_classes = [IsAuthenticated, IsAgent]
     
-    @swagger_auto_schema(
-        request_body=TourneeEndSerializer,
-        responses={
-            200: TourneeDetailSerializer(),
-            404: "Aucune tournée en cours"
-        }
-    )
     def post(self, request):
-        logger.info(f"Demande de fin de tournée pour {request.user.email}")
+        logger.info(f"Fin tournée pour {request.user.email}")
         
-        # Récupérer l'agent
         try:
             agent = Agent.objects.get(email=request.user.email)
         except Agent.DoesNotExist:
-            return Response(
-                {"error": "Agent non trouvé"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Agent non trouvé"}, status=404)
         
         # Récupérer la tournée en cours
-        tournee = Tournee.objects.filter(
-            agent=agent,
-            heure_fin__isnull=True
-        ).first()
-        
+        tournee = Tournee.objects.filter(agent=agent, heure_fin__isnull=True).first()
         if not tournee:
-            logger.warning(f"Aucune tournée en cours pour l'agent {agent.numero_identification}")
-            return Response(
-                {"error": "Aucune tournée en cours"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Aucune tournée en cours"}, status=404)
         
         # Terminer la tournée
         tournee.heure_fin = timezone.now()
-        tournee.calculer_duree()
+        tournee.save()
         
-        # Changer le statut de l'agent
+        # Réactiver l'agent (CRITIQUE pour les futures livraisons)
         agent.statut = 'actif'
         agent.save()
         
-        logger.info(f"Tournée terminée pour l'agent {agent.numero_identification} - Durée: {tournee.duree_formatee}")
+        logger.info(f"Tournée #{tournee.id} terminée pour agent {agent.numero_identification}")
         
-        return Response(
-            TourneeDetailSerializer(tournee).data,
-            status=status.HTTP_200_OK
-        )
+        return Response({
+            "message": "Tournée terminée",
+            "tournee_id": tournee.id,
+            "heure_fin": tournee.heure_fin
+        }, status=200)
 
+
+class TourneeCurrentView(APIView):
+    """Vérifier la tournée en cours (utile pour l'UI)"""
+    permission_classes = [IsAuthenticated, IsAgent]
+    
+    def get(self, request):
+        try:
+            agent = Agent.objects.get(email=request.user.email)
+        except Agent.DoesNotExist:
+            return Response({"error": "Agent non trouvé"}, status=404)
+        
+        tournee = Tournee.objects.filter(agent=agent, heure_fin__isnull=True).first()
+        
+        if tournee:
+            return Response({
+                "en_cours": True,
+                "tournee_id": tournee.id,
+                "heure_debut": tournee.heure_debut
+            })
+        else:
+            return Response({
+                "en_cours": False,
+                "message": "Aucune tournée en cours"
+            })
+        
 
 class TourneeListView(APIView):
     """Lister les tournées"""
@@ -177,6 +150,7 @@ class TourneeListView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+
 class TourneeDetailView(APIView):
     """Récupérer les détails d'une tournée"""
     permission_classes = [IsAuthenticated, IsAgentOrAdmin]
@@ -202,40 +176,3 @@ class TourneeDetailView(APIView):
         serializer = TourneeDetailSerializer(tournee)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-
-class TourneeCurrentView(APIView):
-    """Récupérer la tournée en cours de l'agent"""
-    permission_classes = [IsAuthenticated, IsAgent]
-    
-    @swagger_auto_schema(
-        responses={
-            200: TourneeDetailSerializer(),
-            404: "Aucune tournée en cours"
-        }
-    )
-    def get(self, request):
-        logger.info(f"Récupération de la tournée en cours pour {request.user.email}")
-        
-        # Récupérer l'agent
-        try:
-            agent = Agent.objects.get(email=request.user.email)
-        except Agent.DoesNotExist:
-            return Response(
-                {"error": "Agent non trouvé"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Récupérer la tournée en cours
-        tournee = Tournee.objects.filter(
-            agent=agent,
-            heure_fin__isnull=True
-        ).first()
-        
-        if not tournee:
-            return Response(
-                {"error": "Aucune tournée en cours"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        serializer = TourneeDetailSerializer(tournee)
-        return Response(serializer.data, status=status.HTTP_200_OK)
