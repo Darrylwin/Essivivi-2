@@ -36,9 +36,6 @@ class Commande(models.Model):
         blank=True,
         help_text='Optionnel - calculé depuis les lignes de commande'
     )
-    date_livraison_souhaitee = models.DateField(
-        verbose_name='Date de livraison souhaitée'
-    )
     adresse_livraison = models.TextField(verbose_name='Adresse de livraison')
     
     # Statut
@@ -47,18 +44,6 @@ class Commande(models.Model):
         choices=STATUT_CHOICES,
         default='en_attente',
         verbose_name='Statut'
-    )
-    
-    # Notes et remarques
-    notes_client = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name='Notes du client'
-    )
-    notes_admin = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name='Notes admin'
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -78,16 +63,6 @@ class Commande(models.Model):
     def est_assignee(self):
         """Vérifie si la commande est assignée à un agent"""
         return self.agent is not None
-    
-    @property
-    def peut_etre_annulee(self):
-        """
-        Vérifie si la commande peut être annulée
-        
-        Règle métier : Seule une commande 'en_attente' peut être annulée par le client
-        Une commande 'acceptee' nécessite la validation d'un admin
-        """
-        return self.statut == 'en_attente'
     
     @property
     def montant_total(self):

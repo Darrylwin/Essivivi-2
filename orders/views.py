@@ -290,7 +290,6 @@ class CommandeAssignView(APIView):
             titre='Commande acceptée',
             message=(
                 f"Votre commande #{commande.id} a été acceptée et assignée à un agent. "
-                f"Livraison prévue le {commande.date_livraison_souhaitee}."
             )
         )
         

@@ -42,18 +42,8 @@ class LigneCommandeCreateSerializer(serializers.Serializer):
 class CommandeCreateSerializer(serializers.Serializer):
     """Serializer pour créer une commande avec lignes de produits"""
     
-    date_livraison_souhaitee = serializers.DateField()
     adresse_livraison = serializers.CharField()
-    notes_client = serializers.CharField(required=False, allow_blank=True)
     lignes = LigneCommandeCreateSerializer(many=True)
-    
-    def validate_date_livraison_souhaitee(self, value):
-        """Vérifier que la date n'est pas dans le passé"""
-        if value < timezone.now().date():
-            raise serializers.ValidationError(
-                "La date de livraison ne peut pas être dans le passé"
-            )
-        return value
     
     def validate(self, data):
         """Validations supplémentaires"""
@@ -150,7 +140,7 @@ class CommandeListSerializer(serializers.ModelSerializer):
             'id', 'client', 'client_code', 'client_nom',
             'agent', 'agent_numero', 'agent_nom', 'est_assignee',
             'quantite_totale', 'montant_total',
-            'date_livraison_souhaitee', 'statut', 'created_at'
+            'statut', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
 
@@ -188,7 +178,6 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
     quantite_totale = serializers.IntegerField(read_only=True)
     montant_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     est_assignee = serializers.BooleanField(read_only=True)
-    peut_etre_annulee = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = Commande
@@ -197,9 +186,8 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
             'client_telephone', 'client_adresse',
             'agent', 'agent_numero', 'agent_nom', 'agent_prenom', 'agent_telephone',
             'lignes', 'quantite_totale', 'montant_total',
-            'date_livraison_souhaitee', 'adresse_livraison',
-            'statut', 'est_assignee', 'peut_etre_annulee',
-            'notes_client', 'notes_admin',
+            'adresse_livraison',
+            'statut', 'est_assignee',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -229,18 +217,7 @@ class CommandeStatusSerializer(serializers.Serializer):
 
 class CommandeUpdateSerializer(serializers.Serializer):
     """Serializer pour modifier une commande (client uniquement si en_attente)"""
-    date_livraison_souhaitee = serializers.DateField(required=False)
     adresse_livraison = serializers.CharField(required=False)
-    notes_client = serializers.CharField(required=False, allow_blank=True)
-    notes_admin = serializers.CharField(required=False, allow_blank=True)
-    
-    def validate_date_livraison_souhaitee(self, value):
-        """Vérifier que la date n'est pas dans le passé"""
-        if value and value < timezone.now().date():
-            raise serializers.ValidationError(
-                "La date de livraison ne peut pas être dans le passé"
-            )
-        return value
 
 
 class NotificationSerializer(serializers.ModelSerializer):
