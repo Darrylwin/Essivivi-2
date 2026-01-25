@@ -9,12 +9,21 @@ export function SigninForm({
   className,
   onSubmit,
   ...props
-}: React.ComponentProps<"div"> & { onSubmit?: (e: React.FormEvent<HTMLFormElement>) => void }) {
+}: React.ComponentProps<"div"> & { 
+  onSubmit?: (e: React.FormEvent<HTMLFormElement>) => void 
+}) {
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (onSubmit) {
+      onSubmit(e)
+    }
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form onSubmit={onSubmit} className="p-6 md:p-8">
+          <form onSubmit={handleFormSubmit} className="p-6 md:p-8">
             <div className="flex flex-col gap-6">
               <div className="flex flex-col items-center text-center">
                 <h1 className="text-2xl font-bold">Connexion administrateur</h1>
@@ -25,12 +34,25 @@ export function SigninForm({
 
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" placeholder="admin@example.com" required />
+                <Input 
+                  id="email" 
+                  name="email" 
+                  type="email" 
+                  placeholder="admin@example.com" 
+                  required 
+                  autoComplete="email"
+                />
               </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="password">Mot de passe</Label>
-                <Input id="password" name="password" type="password" required />
+                <Input 
+                  id="password" 
+                  name="password" 
+                  type="password" 
+                  required 
+                  autoComplete="current-password"
+                />
               </div>
 
               <Button type="submit" className="w-full">
@@ -41,8 +63,8 @@ export function SigninForm({
 
           <div className="relative hidden bg-muted md:block">
             <img
-              src="favicon.ico"
-              alt="Image"
+              src="/favicon.ico"
+              alt="Logo ESSIVIVI"
               className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
             />
           </div>
@@ -50,7 +72,7 @@ export function SigninForm({
       </Card>
 
       <div className="text-balance text-center text-xs text-muted-foreground">
-        En vous connectant, vous acceptez nos <a href="#">Conditions d&apos;utilisation</a>.
+        En vous connectant, vous acceptez nos <a href="#" className="underline">Conditions d&apos;utilisation</a>.
       </div>
     </div>
   )

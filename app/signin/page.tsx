@@ -8,38 +8,45 @@ import { toast } from "sonner"
 
 export default function SigninPage() {
   const router = useRouter()
-  const { isAuthenticated, isRestored, restoreSession, login } = useAuth()
+  const { isAuthenticated, isLoading, login } = useAuth()
 
   useEffect(() => {
-    restoreSession()
-  }, [restoreSession])
-
-  useEffect(() => {
-    if (isRestored && isAuthenticated) {
-      router.push("/dashboard/overview")
+    if (isAuthenticated && !isLoading) {
+      router.push("/dashboard")
     }
-  }, [isRestored, isAuthenticated, router])
+  }, [isAuthenticated, isLoading, router])
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement | HTMLDivElement>) => {
     e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const email = String(fd.get("email") || "")
-    const password = String(fd.get("password") || "")
+    const form = e.currentTarget as HTMLElement
+    const email = (form.querySelector('[name="email"]') as HTMLInputElement)?.value || ""
+    const mot_de_passe = (form.querySelector('[name="password"]') as HTMLInputElement)?.value || ""
 
-    try {
-      await login({ email, password })
-      router.push("/dashboard/overview")
-    } catch (err) {
-      // simple error handling; replace with nicer UI if desired
-      console.error(err)
-      // requires: import { toast } from "react-hot-toast"
-      toast.error("Échec de la connexion. Vérifiez vos identifiants.")
-    }
+    ;(async () => {
+      try {
+        // Note: On utilise mot_de_passe, pas password
+        await login({ email, mot_de_passe })
+        router.push("/dashboard")
+      } catch (err: unknown) {
+        console.error("Login error:", err)
+        const errorMessage = (err as { message?: string })?.message || "Échec de la connexion. Vérifiez vos identifiants."
+        toast.error(errorMessage)
+      }
+    })()
+  }
+
+  // Si déjà authentifié, ne pas afficher le formulaire
+  if (isLoading || isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Chargement…</p>
+      </div>
+    )
   }
 
   return (
     <div className="w-full max-w-sm md:max-w-3xl">
-      <SigninForm onSubmit={(e) => { void handleSubmit(e as React.FormEvent<HTMLFormElement>) }} />
+      <SigninForm onSubmit={handleSubmit} />
     </div>
   )
 }

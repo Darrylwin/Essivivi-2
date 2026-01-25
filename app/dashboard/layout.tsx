@@ -9,27 +9,37 @@ import { useAuth } from "@/lib/hooks"
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const { isAuthenticated, isLoading, isRestored, restoreSession } = useAuth()
+  const { isAuthenticated, isLoading } = useAuth()
 
   useEffect(() => {
-    restoreSession()
-  }, [restoreSession])
-
-  useEffect(() => {
-    if (isRestored && !isAuthenticated && !isLoading) {
+    if (!isLoading && !isAuthenticated) {
       router.push("/signin")
     }
-  }, [isRestored, isAuthenticated, isLoading, router])
+  }, [isAuthenticated, isLoading, router])
 
-  if (!isRestored) return null
-  if (isRestored && !isAuthenticated) return null
+  // Afficher un loader pendant le chargement
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Chargement de la session…</p>
+      </div>
+    )
+  }
 
+  // Rediriger si non authentifié
+  if (!isAuthenticated) {
+    return null // Redirection gérée par useEffect
+  }
+
+  // Afficher le layout admin si authentifié
   return (
     <SidebarProvider>
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
-        {children}
+        <main className="flex-1 p-4 md:p-6">
+          {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
   )
