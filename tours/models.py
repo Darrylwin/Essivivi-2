@@ -38,3 +38,16 @@ class Tournee(models.Model):
     def est_terminee(self):
         """Vérifie si la tournée est terminée"""
         return self.heure_fin is not None
+    
+    @property
+    def duree_formatee(self):
+        """Retourne la durée sous forme lisible (ex: 1h 23m 45s)"""
+        duree = self.duree or self.calculer_duree()
+        if not duree:
+            return "-"
+        
+        total_seconds = int(duree.total_seconds())
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        return f"{hours}h {minutes}m {seconds}s"

@@ -22,11 +22,80 @@ logger = logging.getLogger('deliveries')
 # ==================== LIVRAISONS ====================
 
 class LivraisonCreateView(APIView):
-    """Créer une livraison (Agent uniquement)"""
-    permission_classes = [IsAuthenticated, IsAgent]
+    """
+    Créer une livraison
+    
+    - Agent : Peut créer des livraisons pendant sa tournée
+    - Admin : Peut créer des livraisons manuellement (correction, rattrapage)
+    """
+    permission_classes = [IsAuthenticated, IsAgentOrAdmin]
     
     @swagger_auto_schema(
-        request_body=LivraisonCreateSerializer,
+        operation_description="""
+        Créer une nouvelle livraison avec plusieurs produits.
+        
+        **Agent :** Doit être en tournée. La distance avec le client doit être ≤ 2m.
+        **Admin :** Peut créer sans contrainte de tournée ou de distance.
+        """,
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['lignes', 'latitude', 'longitude'],
+            properties={
+                'client_id': openapi.Schema(
+                    type=openapi.TYPE_INTEGER,
+                    description='ID du client existant (optionnel si nouveau client)'
+                ),
+                'nom_point_vente': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='Nom du point de vente (si nouveau client)'
+                ),
+                'nom_responsable': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='Nom du responsable (si nouveau client)'
+                ),
+                'telephone': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='Téléphone (si nouveau client)'
+                ),
+                'adresse': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description='Adresse (si nouveau client)'
+                ),
+                'type_client': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    enum=['detaillant', 'grossiste', 'institution'],
+                    description='Type de client (si nouveau client)'
+                ),
+                'lignes': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'produit_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                            'quantite': openapi.Schema(type=openapi.TYPE_INTEGER, minimum=1)
+                        }
+                    ),
+                    description='Liste des produits livrés'
+                ),
+                'latitude': openapi.Schema(
+                    type=openapi.TYPE_NUMBER,
+                    description='Latitude GPS de la livraison'
+                ),
+                'longitude': openapi.Schema(
+                    type=openapi.TYPE_NUMBER,
+                    description='Longitude GPS de la livraison'
+                ),
+            },
+            example={
+                "client_id": 1,
+                "lignes": [
+                    {"produit_id": 1, "quantite": 10},
+                    {"produit_id": 2, "quantite": 5}
+                ],
+                "latitude": 6.1319,
+                "longitude": 1.2224
+            }
+        ),
         responses={
             201: LivraisonDetailSerializer(),
             400: "Validation échouée"
@@ -35,9 +104,12 @@ class LivraisonCreateView(APIView):
     def post(self, request):
         logger.info(f"Demande de création de livraison par {request.user.email}")
         
+        # Déterminer si c'est un admin
+        is_admin = hasattr(request.user, 'is_staff') and request.user.is_staff
+        
         serializer = LivraisonCreateSerializer(
             data=request.data,
-            context={'request': request}
+            context={'request': request, 'is_admin': is_admin}
         )
         serializer.is_valid(raise_exception=True)
         livraison = serializer.save()
@@ -46,7 +118,6 @@ class LivraisonCreateView(APIView):
             LivraisonDetailSerializer(livraison).data,
             status=status.HTTP_201_CREATED
         )
-
 
 class LivraisonListView(APIView):
     """Lister les livraisons"""

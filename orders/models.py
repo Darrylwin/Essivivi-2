@@ -1,5 +1,6 @@
 from django.db import models
 from authentication.models import Agent, Client
+from decimal import Decimal
 
 
 class Commande(models.Model):
@@ -30,10 +31,10 @@ class Commande(models.Model):
     
     # Informations de la commande
     quantite_demandee = models.IntegerField(
-        verbose_name='Quantité demandée',
+        verbose_name='Quantité totale demandée',
         null=True,
         blank=True,
-        help_text='Optionnel - calculé depuis les lignes'
+        help_text='Optionnel - calculé depuis les lignes de commande'
     )
     date_livraison_souhaitee = models.DateField(
         verbose_name='Date de livraison souhaitée'
@@ -80,26 +81,29 @@ class Commande(models.Model):
     
     @property
     def peut_etre_annulee(self):
-        """Vérifie si la commande peut être annulée"""
-        return self.statut in ['en_attente', 'acceptee']
+        """
+        Vérifie si la commande peut être annulée
+        
+        Règle métier : Seule une commande 'en_attente' peut être annulée par le client
+        Une commande 'acceptee' nécessite la validation d'un admin
+        """
+        return self.statut == 'en_attente'
     
     @property
     def montant_total(self):
-        """Calcule le montant total de la commande"""
-        from decimal import Decimal
+        """Calcule le montant total de la commande depuis les lignes"""
         total = sum(ligne.montant for ligne in self.lignes.all())
         return total if total > 0 else Decimal('0')
     
     @property
     def quantite_totale(self):
-        """Calcule la quantité totale commandée"""
+        """Calcule la quantité totale commandée depuis les lignes"""
         total = sum(ligne.quantite for ligne in self.lignes.all())
         return total if total > 0 else (self.quantite_demandee or 0)
 
 
-# NOUVEAU MODÈLE - AJOUTE À LA FIN
 class LigneCommande(models.Model):
-    """Détail des produits commandés"""
+    """Détail des produits commandés dans une commande"""
     
     commande = models.ForeignKey(
         Commande,
@@ -119,12 +123,13 @@ class LigneCommande(models.Model):
     prix_unitaire = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        verbose_name='Prix unitaire au moment de la commande'
+        verbose_name='Prix unitaire au moment de la commande',
+        help_text='Prix capturé lors de la commande (peut différer du prix actuel)'
     )
     montant = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        verbose_name='Montant total'
+        verbose_name='Montant total (quantité × prix)'
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -135,9 +140,10 @@ class LigneCommande(models.Model):
         verbose_name_plural = 'Lignes de commande'
     
     def __str__(self):
-        return f"{self.produit.nom} × {self.quantite}"
+        return f"{self.produit.nom_complet} × {self.quantite}"
     
     def save(self, *args, **kwargs):
+        """Calculer automatiquement le montant avant la sauvegarde"""
         self.montant = self.quantite * self.prix_unitaire
         super().save(*args, **kwargs)
 

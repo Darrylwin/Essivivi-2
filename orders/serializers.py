@@ -1,30 +1,52 @@
 from rest_framework import serializers
 from django.utils import timezone
-from datetime import datetime
+from decimal import Decimal
 from .models import Commande, Notification, LigneCommande
+from products.models import Produit
+from products.serializers import ProduitListSerializer
 from authentication.models import Agent, Client
 import logging
 
 logger = logging.getLogger('orders')
 
 
+class LigneCommandeSerializer(serializers.ModelSerializer):
+    """Serializer pour les lignes de commande"""
+    produit_detail = ProduitListSerializer(source='produit', read_only=True)
+    
+    class Meta:
+        model = LigneCommande
+        fields = [
+            'id', 'produit', 'produit_detail', 'quantite',
+            'prix_unitaire', 'montant', 'created_at'
+        ]
+        read_only_fields = ['id', 'montant', 'created_at']
 
-# Serializer pour créer une ligne de commande
+
 class LigneCommandeCreateSerializer(serializers.Serializer):
+    """Serializer pour créer une ligne de commande"""
     produit_id = serializers.IntegerField()
     quantite = serializers.IntegerField(min_value=1)
+    
+    def validate_produit_id(self, value):
+        """Vérifier que le produit existe et est actif"""
+        try:
+            produit = Produit.objects.get(id=value)
+            if not produit.actif:
+                raise serializers.ValidationError("Ce produit n'est plus disponible")
+        except Produit.DoesNotExist:
+            raise serializers.ValidationError("Produit non trouvé")
+        return value
 
-class CommandeCreateSerializer(serializers.ModelSerializer):
-    """Serializer pour créer une commande"""
+
+class CommandeCreateSerializer(serializers.Serializer):
+    """Serializer pour créer une commande avec lignes de produits"""
+    
+    date_livraison_souhaitee = serializers.DateField()
+    adresse_livraison = serializers.CharField()
+    notes_client = serializers.CharField(required=False, allow_blank=True)
     lignes = LigneCommandeCreateSerializer(many=True)
-
-    class Meta:
-        model = Commande
-        fields = [
-            'date_livraison_souhaitee',
-            'adresse_livraison', 'notes_client', 'lignes'
-        ]
-
+    
     def validate_date_livraison_souhaitee(self, value):
         """Vérifier que la date n'est pas dans le passé"""
         if value < timezone.now().date():
@@ -32,37 +54,58 @@ class CommandeCreateSerializer(serializers.ModelSerializer):
                 "La date de livraison ne peut pas être dans le passé"
             )
         return value
-
+    
+    def validate(self, data):
+        """Validations supplémentaires"""
+        # Vérifier qu'il y a au moins une ligne de commande
+        if not data.get('lignes') or len(data.get('lignes')) == 0:
+            raise serializers.ValidationError({
+                'lignes': "Vous devez commander au moins un produit."
+            })
+        return data
+    
     def create(self, validated_data):
-        """Création de la commande avec lignes de commande"""
+        """Création de la commande avec lignes"""
         request = self.context.get('request')
+        
+        # Récupérer le client
         try:
             client = Client.objects.get(email=request.user.email)
         except Client.DoesNotExist:
             raise serializers.ValidationError("Client non trouvé")
-
+        
+        # Extraire les lignes
         lignes_data = validated_data.pop('lignes', [])
+        
+        # Créer la commande
         commande = Commande.objects.create(
             client=client,
             statut='en_attente',
             **validated_data
         )
-
-        from products.models import Produit
+        
+        # Créer les lignes de commande
         quantite_totale = 0
+        montant_total = Decimal('0')
+        
         for ligne_data in lignes_data:
             produit = Produit.objects.get(id=ligne_data['produit_id'])
-            LigneCommande.objects.create(
+            
+            ligne = LigneCommande.objects.create(
                 commande=commande,
                 produit=produit,
                 quantite=ligne_data['quantite'],
-                prix_unitaire=produit.prix_unitaire,
-                montant=ligne_data['quantite'] * float(produit.prix_unitaire)
+                prix_unitaire=produit.prix_unitaire
             )
-            quantite_totale += ligne_data['quantite']
+            
+            quantite_totale += ligne.quantite
+            montant_total += ligne.montant
+        
+        # Mettre à jour le total (optionnel car calculé via propriété)
         commande.quantite_demandee = quantite_totale
         commande.save()
-
+        
+        # Créer une notification pour les admins
         Notification.objects.create(
             type='nouvelle_commande',
             client=client,
@@ -70,13 +113,16 @@ class CommandeCreateSerializer(serializers.ModelSerializer):
             titre='Nouvelle commande',
             message=(
                 f"Le client {client.nom_point_vente} ({client.code_client}) "
-                f"a passé une nouvelle commande de {commande.quantite_demandee} unités."
+                f"a passé une nouvelle commande de {quantite_totale} unités "
+                f"pour un montant de {montant_total} FCFA."
             )
         )
+        
         logger.info(
             f"Commande créée : #{commande.id} - Client {client.code_client} - "
-            f"{commande.quantite_demandee} unités"
+            f"{len(lignes_data)} produit(s), {quantite_totale} unités, {montant_total} FCFA"
         )
+        
         return commande
 
 
@@ -95,14 +141,16 @@ class CommandeListSerializer(serializers.ModelSerializer):
         allow_null=True
     )
     est_assignee = serializers.BooleanField(read_only=True)
+    quantite_totale = serializers.IntegerField(read_only=True)
+    montant_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     
     class Meta:
         model = Commande
         fields = [
             'id', 'client', 'client_code', 'client_nom',
             'agent', 'agent_numero', 'agent_nom', 'est_assignee',
-            'quantite_demandee', 'date_livraison_souhaitee',
-            'statut', 'created_at'
+            'quantite_totale', 'montant_total',
+            'date_livraison_souhaitee', 'statut', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
 
@@ -136,6 +184,9 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
         allow_null=True
     )
     
+    lignes = LigneCommandeSerializer(many=True, read_only=True)
+    quantite_totale = serializers.IntegerField(read_only=True)
+    montant_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     est_assignee = serializers.BooleanField(read_only=True)
     peut_etre_annulee = serializers.BooleanField(read_only=True)
     
@@ -145,7 +196,8 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
             'id', 'client', 'client_code', 'client_nom', 'client_responsable',
             'client_telephone', 'client_adresse',
             'agent', 'agent_numero', 'agent_nom', 'agent_prenom', 'agent_telephone',
-            'quantite_demandee', 'date_livraison_souhaitee', 'adresse_livraison',
+            'lignes', 'quantite_totale', 'montant_total',
+            'date_livraison_souhaitee', 'adresse_livraison',
             'statut', 'est_assignee', 'peut_etre_annulee',
             'notes_client', 'notes_admin',
             'created_at', 'updated_at'
@@ -175,15 +227,20 @@ class CommandeStatusSerializer(serializers.Serializer):
     )
 
 
-class CommandeUpdateSerializer(serializers.ModelSerializer):
-    """Serializer pour modifier une commande"""
+class CommandeUpdateSerializer(serializers.Serializer):
+    """Serializer pour modifier une commande (client uniquement si en_attente)"""
+    date_livraison_souhaitee = serializers.DateField(required=False)
+    adresse_livraison = serializers.CharField(required=False)
+    notes_client = serializers.CharField(required=False, allow_blank=True)
+    notes_admin = serializers.CharField(required=False, allow_blank=True)
     
-    class Meta:
-        model = Commande
-        fields = [
-            'quantite_demandee', 'date_livraison_souhaitee',
-            'adresse_livraison', 'notes_client', 'notes_admin'
-        ]
+    def validate_date_livraison_souhaitee(self, value):
+        """Vérifier que la date n'est pas dans le passé"""
+        if value and value < timezone.now().date():
+            raise serializers.ValidationError(
+                "La date de livraison ne peut pas être dans le passé"
+            )
+        return value
 
 
 class NotificationSerializer(serializers.ModelSerializer):
