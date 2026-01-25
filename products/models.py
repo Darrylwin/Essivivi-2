@@ -124,11 +124,3 @@ class Produit(models.Model):
         if self.volume:
             return f"{self.nom} {self.volume}"
         return self.nom
-    
-    @property
-    def nom_complet(self):
-        """Retourne le nom complet du produit"""
-        parts = [self.nom]
-        if self.volume:
-            parts.append(self.volume)
-        return ' '.join(parts)

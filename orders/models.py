@@ -115,7 +115,7 @@ class LigneCommande(models.Model):
         verbose_name_plural = 'Lignes de commande'
     
     def __str__(self):
-        return f"{self.produit.nom_complet} × {self.quantite}"
+        return f"{self.produit.nom} × {self.quantite}"
     
     def save(self, *args, **kwargs):
         """Calculer automatiquement le montant avant la sauvegarde"""

@@ -2,8 +2,9 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.shortcuts import get_object_or_404
-from django.db import models
+from django.db.models import Q
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 import logging
@@ -11,233 +12,212 @@ import logging
 from .models import Categorie, Produit
 from .serializers import (
     CategorieSerializer,
+    CategorieListSerializer,
     CategorieAvecProduitsSerializer,
     ProduitListSerializer,
     ProduitDetailSerializer,
-    ProduitCreateUpdateSerializer
+    ProduitCreateSerializer,
+    ProduitUpdateSerializer
 )
-from users.permissions import IsAdmin, IsAdminOrReadOnly
+from users.permissions import IsAdmin
 
 logger = logging.getLogger('products')
 
 
 # ==================== CATÉGORIES ====================
 
-class CategorieListView(APIView):
+class CategorieListCreateView(APIView):
     """
-    Lister toutes les catégories
-    
-    Accessible par tous les utilisateurs authentifiés
-    Filtres disponibles : actif
+    GET: Liste toutes les catégories
+    POST: Crée une nouvelle catégorie (Admin)
     """
     permission_classes = [IsAuthenticated]
     
     @swagger_auto_schema(
-        operation_description="Récupérer la liste de toutes les catégories",
+        operation_description="Liste toutes les catégories avec filtres optionnels",
         manual_parameters=[
             openapi.Parameter(
                 'actif',
                 openapi.IN_QUERY,
-                description="Filtrer par statut (true/false). Ex: actif=true pour voir uniquement les catégories actives",
+                description="Filtrer par statut (true/false)",
                 type=openapi.TYPE_BOOLEAN
             ),
             openapi.Parameter(
                 'avec_produits',
                 openapi.IN_QUERY,
-                description="Inclure la liste des produits de chaque catégorie (true/false)",
+                description="Inclure les produits de chaque catégorie (true/false)",
                 type=openapi.TYPE_BOOLEAN
             ),
         ],
-        responses={
-            200: openapi.Response(
-                description="Liste des catégories",
-                examples={
-                    "application/json": [
-                        {
-                            "id": 1,
-                            "nom": "Eau en sachet",
-                            "description": "Eau potable conditionnée en sachets",
-                            "actif": True,
-                            "nombre_produits": 3,
-                            "created_at": "2024-01-20T10:00:00Z",
-                            "updated_at": "2024-01-20T10:00:00Z"
-                        }
-                    ]
-                }
-            )
-        }
+        responses={200: CategorieListSerializer(many=True)}
     )
     def get(self, request):
+        """Liste toutes les catégories"""
         logger.info("Récupération de la liste des catégories")
         
         categories = Categorie.objects.all()
         
-        # Filtrer par statut actif
-        actif = request.query_params.get('actif', None)
+        # Filtre par statut actif
+        actif = request.query_params.get('actif')
         if actif is not None:
             actif_bool = actif.lower() == 'true'
             categories = categories.filter(actif=actif_bool)
-            logger.info(f"Filtre appliqué : actif={actif_bool}")
+            logger.info(f"Filtre actif appliqué : {actif_bool}")
         
-        # Choisir le serializer selon le paramètre
+        # Choisir le serializer
         avec_produits = request.query_params.get('avec_produits', 'false').lower() == 'true'
         
         if avec_produits:
-            serializer = CategorieAvecProduitsSerializer(categories, many=True, context={'request': request})
+            serializer = CategorieAvecProduitsSerializer(categories, many=True)
         else:
-            serializer = CategorieSerializer(categories, many=True)
+            serializer = CategorieListSerializer(categories, many=True)
         
-        logger.info(f"{categories.count()} catégories récupérées")
+        logger.info(f"{categories.count()} catégories trouvées")
         
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class CategorieCreateView(APIView):
-    """
-    Créer une nouvelle catégorie (Admin uniquement)
-    """
-    permission_classes = [IsAuthenticated, IsAdmin]
+        return Response({
+            'count': categories.count(),
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
-        operation_description="Créer une nouvelle catégorie de produits",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['nom'],
-            properties={
-                'nom': openapi.Schema(type=openapi.TYPE_STRING, description='Nom de la catégorie'),
-                'description': openapi.Schema(type=openapi.TYPE_STRING, description='Description (optionnelle)'),
-                'actif': openapi.Schema(type=openapi.TYPE_BOOLEAN, description='Actif (true par défaut)'),
-            },
-            example={
-                "nom": "Eau en sachet",
-                "description": "Eau potable conditionnée en sachets",
-                "actif": True
-            }
-        ),
-        responses={
-            201: openapi.Response(
-                description="Catégorie créée avec succès",
-                examples={
-                    "application/json": {
-                        "id": 1,
-                        "nom": "Eau en sachet",
-                        "description": "Eau potable conditionnée en sachets",
-                        "actif": True,
-                        "nombre_produits": 0,
-                        "created_at": "2024-01-20T10:00:00Z",
-                        "updated_at": "2024-01-20T10:00:00Z"
-                    }
-                }
-            ),
-            400: "Erreur de validation"
-        }
+        operation_description="Crée une nouvelle catégorie (Admin uniquement)",
+        request_body=CategorieSerializer,
+        responses={201: CategorieSerializer()}
     )
     def post(self, request):
+        """Crée une nouvelle catégorie (Admin)"""
+        # Vérifier que l'utilisateur est admin
+        if not (hasattr(request.user, 'is_staff') and request.user.is_staff):
+            return Response(
+                {'error': 'Vous devez être administrateur pour créer une catégorie'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         logger.info("Création d'une nouvelle catégorie")
         
         serializer = CategorieSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         categorie = serializer.save()
         
-        logger.info(f"Catégorie créée : {categorie.nom}")
-        
-        return Response(
-            CategorieSerializer(categorie).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response({
+            'message': 'Catégorie créée avec succès',
+            'categorie': CategorieSerializer(categorie).data
+        }, status=status.HTTP_201_CREATED)
 
 
 class CategorieDetailView(APIView):
     """
-    Récupérer, modifier ou supprimer une catégorie
+    GET: Récupère une catégorie
+    PUT/PATCH: Modifie une catégorie (Admin)
+    DELETE: Supprime une catégorie (Admin)
     """
-    permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     
     @swagger_auto_schema(
-        operation_description="Récupérer les détails d'une catégorie",
-        responses={
-            200: CategorieAvecProduitsSerializer(),
-            404: "Catégorie non trouvée"
-        }
+        operation_description="Récupère les détails d'une catégorie avec ses produits",
+        responses={200: CategorieAvecProduitsSerializer()}
     )
     def get(self, request, pk):
-        logger.info(f"Récupération de la catégorie ID {pk}")
+        """Récupère une catégorie"""
+        logger.info(f"Récupération catégorie ID {pk}")
         categorie = get_object_or_404(Categorie, pk=pk)
-        serializer = CategorieAvecProduitsSerializer(categorie, context={'request': request})
+        serializer = CategorieAvecProduitsSerializer(categorie)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
-        operation_description="Modifier une catégorie (Admin uniquement)",
+        operation_description="Modifie une catégorie (Admin uniquement)",
         request_body=CategorieSerializer,
-        responses={
-            200: CategorieSerializer(),
-            400: "Erreur de validation",
-            404: "Catégorie non trouvée"
-        }
+        responses={200: CategorieSerializer()}
     )
     def put(self, request, pk):
-        logger.info(f"Mise à jour de la catégorie ID {pk}")
+        """Modifie une catégorie (Admin)"""
+        if not (hasattr(request.user, 'is_staff') and request.user.is_staff):
+            return Response(
+                {'error': 'Vous devez être administrateur'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        logger.info(f"Modification catégorie ID {pk}")
+        categorie = get_object_or_404(Categorie, pk=pk)
+        
+        serializer = CategorieSerializer(categorie, data=request.data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        categorie = serializer.save()
+        
+        return Response({
+            'message': 'Catégorie mise à jour avec succès',
+            'categorie': CategorieSerializer(categorie).data
+        }, status=status.HTTP_200_OK)
+    
+    @swagger_auto_schema(
+        operation_description="Modifie partiellement une catégorie (Admin uniquement)",
+        request_body=CategorieSerializer,
+        responses={200: CategorieSerializer()}
+    )
+    def patch(self, request, pk):
+        """Modifie partiellement une catégorie (Admin)"""
+        if not (hasattr(request.user, 'is_staff') and request.user.is_staff):
+            return Response(
+                {'error': 'Vous devez être administrateur'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        logger.info(f"Modification partielle catégorie ID {pk}")
         categorie = get_object_or_404(Categorie, pk=pk)
         
         serializer = CategorieSerializer(categorie, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         categorie = serializer.save()
         
-        logger.info(f"Catégorie mise à jour : {categorie.nom}")
-        
-        return Response(
-            CategorieSerializer(categorie).data,
-            status=status.HTTP_200_OK
-        )
+        return Response({
+            'message': 'Catégorie mise à jour avec succès',
+            'categorie': CategorieSerializer(categorie).data
+        }, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
-        operation_description="Supprimer une catégorie (Admin uniquement)",
-        responses={
-            204: "Catégorie supprimée avec succès",
-            400: "Impossible de supprimer (contient des produits)",
-            404: "Catégorie non trouvée"
-        }
+        operation_description="Supprime une catégorie (Admin uniquement)",
+        responses={200: "Catégorie supprimée"}
     )
     def delete(self, request, pk):
-        logger.info(f"Suppression de la catégorie ID {pk}")
+        """Supprime une catégorie (Admin)"""
+        if not (hasattr(request.user, 'is_staff') and request.user.is_staff):
+            return Response(
+                {'error': 'Vous devez être administrateur'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        logger.info(f"Suppression catégorie ID {pk}")
         categorie = get_object_or_404(Categorie, pk=pk)
         
-        # Vérifier qu'il n'y a pas de produits dans cette catégorie
+        # Vérifier qu'il n'y a pas de produits
         if categorie.produits.exists():
             count = categorie.produits.count()
-            logger.warning(f"Impossible de supprimer la catégorie {categorie.nom} : contient {count} produit(s)")
-            return Response(
-                {
-                    "error": f"Impossible de supprimer cette catégorie car elle contient {count} produit(s). "
-                             f"Veuillez d'abord supprimer ou déplacer les produits."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({
+                'error': f"Impossible de supprimer : cette catégorie contient {count} produit(s). "
+                        f"Supprimez d'abord les produits."
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         nom = categorie.nom
         categorie.delete()
-        
         logger.info(f"Catégorie supprimée : {nom}")
         
-        return Response(
-            {"message": f"Catégorie '{nom}' supprimée avec succès"},
-            status=status.HTTP_204_NO_CONTENT
-        )
+        return Response({
+            'message': f"Catégorie '{nom}' supprimée avec succès"
+        }, status=status.HTTP_200_OK)
 
 
 # ==================== PRODUITS ====================
 
-class ProduitListView(APIView):
+class ProduitListCreateView(APIView):
     """
-    Lister tous les produits
-    
-    Accessible par tous les utilisateurs authentifiés
-    Filtres : catégorie, actif, recherche
+    GET: Liste tous les produits
+    POST: Crée un nouveau produit (Admin)
     """
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     @swagger_auto_schema(
-        operation_description="Récupérer la liste de tous les produits avec filtres optionnels",
+        operation_description="Liste tous les produits avec filtres optionnels",
         manual_parameters=[
             openapi.Parameter(
                 'categorie_id',
@@ -254,155 +234,162 @@ class ProduitListView(APIView):
             openapi.Parameter(
                 'search',
                 openapi.IN_QUERY,
-                description="Rechercher par nom, marque",
+                description="Rechercher par nom, marque ou volume",
                 type=openapi.TYPE_STRING
             ),
         ],
         responses={200: ProduitListSerializer(many=True)}
     )
     def get(self, request):
+        """Liste tous les produits"""
         logger.info("Récupération de la liste des produits")
         
         produits = Produit.objects.select_related('categorie').all()
         
-        # Filtrer par catégorie
-        categorie_id = request.query_params.get('categorie_id', None)
+        # Filtre par catégorie
+        categorie_id = request.query_params.get('categorie_id')
         if categorie_id:
             produits = produits.filter(categorie_id=categorie_id)
-            logger.info(f"Filtre appliqué : categorie_id={categorie_id}")
+            logger.info(f"Filtre categorie_id appliqué : {categorie_id}")
         
-        # Filtrer par statut actif
-        actif = request.query_params.get('actif', None)
+        # Filtre par statut actif
+        actif = request.query_params.get('actif')
         if actif is not None:
             actif_bool = actif.lower() == 'true'
             produits = produits.filter(actif=actif_bool)
-            logger.info(f"Filtre appliqué : actif={actif_bool}")
+            logger.info(f"Filtre actif appliqué : {actif_bool}")
         
         # Recherche
-        search = request.query_params.get('search', None)
+        search = request.query_params.get('search')
         if search:
             produits = produits.filter(
-                models.Q(nom__icontains=search) |
-                models.Q(marque__icontains=search) |
-                models.Q(volume__icontains=search)
+                Q(nom__icontains=search) |
+                Q(marque__icontains=search) |
+                Q(volume__icontains=search)
             )
             logger.info(f"Recherche appliquée : {search}")
         
-        serializer = ProduitListSerializer(produits, many=True, context={'request': request})
-        logger.info(f"{produits.count()} produits récupérés")
+        serializer = ProduitListSerializer(produits, many=True)
+        logger.info(f"{produits.count()} produits trouvés")
         
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class ProduitCreateView(APIView):
-    """
-    Créer un nouveau produit (Admin uniquement)
-    """
-    permission_classes = [IsAuthenticated, IsAdmin]
+        return Response({
+            'count': produits.count(),
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
-        operation_description="Créer un nouveau produit avec photo optionnelle",
-        manual_parameters=[
-            openapi.Parameter('categorie', openapi.IN_FORM, type=openapi.TYPE_INTEGER, required=True),
-            openapi.Parameter('nom', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True),
-            openapi.Parameter('marque', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True),
-            openapi.Parameter('volume', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('unite_vente', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True),
-            openapi.Parameter('prix_unitaire', openapi.IN_FORM, type=openapi.TYPE_NUMBER, required=True),
-            openapi.Parameter('photo', openapi.IN_FORM, type=openapi.TYPE_FILE, required=False),
-            openapi.Parameter('actif', openapi.IN_FORM, type=openapi.TYPE_BOOLEAN, required=False),
-        ],
-        consumes=['multipart/form-data'],
-        responses={
-            201: ProduitDetailSerializer(),
-            400: "Erreur de validation"
-        }
+        operation_description="Crée un nouveau produit (Admin uniquement)",
+        request_body=ProduitCreateSerializer,
+        responses={201: ProduitDetailSerializer()}
     )
     def post(self, request):
+        """Crée un nouveau produit (Admin)"""
+        if not (hasattr(request.user, 'is_staff') and request.user.is_staff):
+            return Response(
+                {'error': 'Vous devez être administrateur pour créer un produit'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         logger.info("Création d'un nouveau produit")
         
-        serializer = ProduitCreateUpdateSerializer(data=request.data, context={'request': request})
+        serializer = ProduitCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         produit = serializer.save()
         
-        logger.info(f"Produit créé : {produit.nom_complet}")
-        
-        return Response(
-            ProduitDetailSerializer(produit, context={'request': request}).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response({
+            'message': 'Produit créé avec succès',
+            'produit': ProduitDetailSerializer(produit).data
+        }, status=status.HTTP_201_CREATED)
 
 
 class ProduitDetailView(APIView):
     """
-    Récupérer, modifier ou supprimer un produit
+    GET: Récupère un produit
+    PUT/PATCH: Modifie un produit (Admin)
+    DELETE: Supprime un produit (Admin)
     """
-    permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     @swagger_auto_schema(
-        operation_description="Récupérer les détails d'un produit",
-        responses={
-            200: ProduitDetailSerializer(),
-            404: "Produit non trouvé"
-        }
+        operation_description="Récupère les détails d'un produit",
+        responses={200: ProduitDetailSerializer()}
     )
     def get(self, request, pk):
-        logger.info(f"Récupération du produit ID {pk}")
+        """Récupère un produit"""
+        logger.info(f"Récupération produit ID {pk}")
         produit = get_object_or_404(Produit.objects.select_related('categorie'), pk=pk)
-        serializer = ProduitDetailSerializer(produit, context={'request': request})
+        serializer = ProduitDetailSerializer(produit)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
-        operation_description="Modifier un produit (Admin uniquement)",
-        manual_parameters=[
-            openapi.Parameter('categorie', openapi.IN_FORM, type=openapi.TYPE_INTEGER, required=False),
-            openapi.Parameter('nom', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('marque', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('volume', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('unite_vente', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('prix_unitaire', openapi.IN_FORM, type=openapi.TYPE_NUMBER, required=False),
-            openapi.Parameter('photo', openapi.IN_FORM, type=openapi.TYPE_FILE, required=False),
-            openapi.Parameter('actif', openapi.IN_FORM, type=openapi.TYPE_BOOLEAN, required=False),
-        ],
-        consumes=['multipart/form-data'],
-        responses={
-            200: ProduitDetailSerializer(),
-            400: "Erreur de validation",
-            404: "Produit non trouvé"
-        }
+        operation_description="Modifie un produit (Admin uniquement)",
+        request_body=ProduitUpdateSerializer,
+        responses={200: ProduitDetailSerializer()}
     )
     def put(self, request, pk):
-        logger.info(f"Mise à jour du produit ID {pk}")
+        """Modifie un produit (Admin)"""
+        if not (hasattr(request.user, 'is_staff') and request.user.is_staff):
+            return Response(
+                {'error': 'Vous devez être administrateur'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        logger.info(f"Modification produit ID {pk}")
         produit = get_object_or_404(Produit, pk=pk)
         
-        serializer = ProduitCreateUpdateSerializer(produit, data=request.data, partial=True, context={'request': request})
+        serializer = ProduitUpdateSerializer(produit, data=request.data, partial=False)
         serializer.is_valid(raise_exception=True)
         produit = serializer.save()
         
-        logger.info(f"Produit mis à jour : {produit.nom_complet}")
-        
-        return Response(
-            ProduitDetailSerializer(produit, context={'request': request}).data,
-            status=status.HTTP_200_OK
-        )
+        return Response({
+            'message': 'Produit mis à jour avec succès',
+            'produit': ProduitDetailSerializer(produit).data
+        }, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
-        operation_description="Supprimer un produit (Admin uniquement)",
-        responses={
-            204: "Produit supprimé avec succès",
-            404: "Produit non trouvé"
-        }
+        operation_description="Modifie partiellement un produit (Admin uniquement)",
+        request_body=ProduitUpdateSerializer,
+        responses={200: ProduitDetailSerializer()}
     )
-    def delete(self, request, pk):
-        logger.info(f"Suppression du produit ID {pk}")
+    def patch(self, request, pk):
+        """Modifie partiellement un produit (Admin)"""
+        if not (hasattr(request.user, 'is_staff') and request.user.is_staff):
+            return Response(
+                {'error': 'Vous devez être administrateur'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        logger.info(f"Modification partielle produit ID {pk}")
         produit = get_object_or_404(Produit, pk=pk)
         
-        nom_complet = produit.nom_complet
+        serializer = ProduitUpdateSerializer(produit, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        produit = serializer.save()
+        
+        return Response({
+            'message': 'Produit mis à jour avec succès',
+            'produit': ProduitDetailSerializer(produit).data
+        }, status=status.HTTP_200_OK)
+    
+    @swagger_auto_schema(
+        operation_description="Supprime un produit (Admin uniquement)",
+        responses={200: "Produit supprimé"}
+    )
+    def delete(self, request, pk):
+        """Supprime un produit (Admin)"""
+        if not (hasattr(request.user, 'is_staff') and request.user.is_staff):
+            return Response(
+                {'error': 'Vous devez être administrateur'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        logger.info(f"Suppression produit ID {pk}")
+        produit = get_object_or_404(Produit, pk=pk)
+        
         produit.delete()
+        logger.info(f"Produit supprimé : {produit.nom}")
         
-        logger.info(f"Produit supprimé : {nom_complet}")
-        
-        return Response(
-            {"message": f"Produit '{nom_complet}' supprimé avec succès"},
-            status=status.HTTP_204_NO_CONTENT
-        )
+        return Response({
+            'message': f"Produit '{produit.nom}' supprimé avec succès"
+        }, status=status.HTTP_200_OK)

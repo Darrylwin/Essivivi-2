@@ -5,131 +5,186 @@ import logging
 logger = logging.getLogger('products')
 
 
+# ==================== CATÉGORIES ====================
+
 class CategorieSerializer(serializers.ModelSerializer):
-    """Serializer pour les catégories de produits"""
+    """Serializer pour les catégories"""
     nombre_produits = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = Categorie
         fields = [
-            'id',
-            'nom',
-            'description',
-            'actif',
-            'nombre_produits',
-            'created_at',
-            'updated_at'
+            'id', 'nom', 'description', 'actif',
+            'nombre_produits', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'nombre_produits', 'created_at', 'updated_at']
+    
+    def validate_nom(self, value):
+        """Vérifier que le nom est unique"""
+        instance = self.instance
+        if Categorie.objects.filter(nom=value).exclude(
+            pk=instance.pk if instance else None
+        ).exists():
+            raise serializers.ValidationError(
+                "Une catégorie avec ce nom existe déjà"
+            )
+        return value
 
+
+class CategorieListSerializer(serializers.ModelSerializer):
+    """Serializer compact pour lister les catégories"""
+    nombre_produits = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = Categorie
+        fields = ['id', 'nom', 'actif', 'nombre_produits']
+        read_only_fields = ['id', 'nombre_produits']
+
+
+# ==================== PRODUITS ====================
 
 class ProduitListSerializer(serializers.ModelSerializer):
-    """Serializer compact pour lister les produits (pour les agents)"""
+    """Serializer compact pour lister les produits"""
     categorie_nom = serializers.CharField(source='categorie.nom', read_only=True)
-    nom_complet = serializers.CharField(read_only=True)
     
     class Meta:
         model = Produit
         fields = [
-            'id',
-            'nom',
-            'nom_complet',
-            'marque',
-            'volume',
-            'unite_vente',
-            'prix_unitaire',
-            'categorie',
-            'categorie_nom',
-            'actif'
+            'id', 'nom', 'marque', 'volume',
+            'unite_vente', 'prix_unitaire', 'categorie',
+            'categorie_nom', 'actif'
         ]
-        read_only_fields = ['id', 'nom_complet']
+        read_only_fields = ['id']
 
 
 class ProduitDetailSerializer(serializers.ModelSerializer):
     """Serializer détaillé pour un produit"""
-    categorie_detail = CategorieSerializer(source='categorie', read_only=True)
-    nom_complet = serializers.CharField(read_only=True)
+    categorie_detail = CategorieListSerializer(source='categorie', read_only=True)
     
     class Meta:
         model = Produit
         fields = [
-            'id',
-            'nom',
-            'nom_complet',
-            'marque',
-            'volume',
-            'unite_vente',
-            'prix_unitaire',
-            'categorie',
-            'categorie_detail',
-            'actif',
-            'created_at',
-            'updated_at'
+            'id', 'nom', 'marque', 'volume',
+            'unite_vente', 'prix_unitaire', 'photo', 'categorie',
+            'categorie_detail', 'actif', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'nom_complet', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
-
-class ProduitCreateUpdateSerializer(serializers.ModelSerializer):
-    """Serializer pour créer ou modifier un produit"""
+class ProduitCreateSerializer(serializers.ModelSerializer):
+    """Serializer pour créer un produit"""
+    categorie_id = serializers.PrimaryKeyRelatedField(
+        queryset=Categorie.objects.all(),
+        source='categorie',
+        write_only=True,
+        help_text="ID de la catégorie"
+    )
+    photo = serializers.ImageField(
+        required=False,
+        allow_null=True,
+        help_text="Photo du produit (optionnelle)"
+    )
     
     class Meta:
         model = Produit
         fields = [
-            'categorie',
-            'nom',
-            'marque',
-            'volume',
-            'unite_vente',
-            'prix_unitaire',
-            'actif'
+            'categorie_id', 'nom', 'marque', 'volume',
+            'unite_vente', 'prix_unitaire', 'photo', 'actif'
         ]
+    
+    def validate_prix_unitaire(self, value):
+        """Vérifier que le prix est positif"""
+        if value <= 0:
+            raise serializers.ValidationError(
+                "Le prix doit être supérieur à 0"
+            )
+        return value
     
     def validate(self, data):
-        """Validation personnalisée"""
-        # Vérifier que le prix est positif
-        if data.get('prix_unitaire') and data['prix_unitaire'] <= 0:
-            raise serializers.ValidationError({
-                'prix_unitaire': 'Le prix doit être supérieur à 0'
-            })
-        
-        # Vérifier l'unicité (catégorie + nom + volume)
-        instance = self.instance
+        """Validation de l'unicité"""
         categorie = data.get('categorie')
         nom = data.get('nom')
         volume = data.get('volume')
         
-        if categorie and nom:
-            queryset = Produit.objects.filter(
-                categorie=categorie,
-                nom=nom,
-                volume=volume
+        # Vérifier l'unicité (catégorie + nom + volume)
+        if Produit.objects.filter(
+            categorie=categorie,
+            nom=nom,
+            volume=volume
+        ).exists():
+            raise serializers.ValidationError(
+                "Un produit avec ce nom et ce volume existe déjà dans cette catégorie"
             )
-            
-            # Exclure l'instance actuelle si modification
-            if instance:
-                queryset = queryset.exclude(pk=instance.pk)
-            
-            if queryset.exists():
-                raise serializers.ValidationError(
-                    'Un produit avec ce nom et ce volume existe déjà dans cette catégorie'
-                )
         
         return data
     
     def create(self, validated_data):
         logger.info(f"Création du produit : {validated_data.get('nom')}")
         produit = Produit.objects.create(**validated_data)
-        logger.info(f"Produit créé : {produit.nom_complet}")
+        logger.info(f"Produit créé : {produit.nom} (ID: {produit.id})")
         return produit
+
+
+class ProduitUpdateSerializer(serializers.ModelSerializer):
+    """Serializer pour modifier un produit"""
+    categorie_id = serializers.PrimaryKeyRelatedField(
+        queryset=Categorie.objects.all(),
+        source='categorie',
+        required=False,
+        help_text="ID de la catégorie"
+    )
+    photo = serializers.ImageField(
+        required=False,
+        allow_null=True,
+        help_text="Photo du produit"
+    )
+    
+    class Meta:
+        model = Produit
+        fields = [
+            'categorie_id', 'nom', 'marque', 'volume',
+            'unite_vente', 'prix_unitaire', 'photo', 'actif'
+        ]
+    
+    def validate_prix_unitaire(self, value):
+        """Vérifier que le prix est positif"""
+        if value and value <= 0:
+            raise serializers.ValidationError(
+                "Le prix doit être supérieur à 0"
+            )
+        return value
+    
+    def validate(self, data):
+        """Validation de l'unicité (sauf pour le produit actuel)"""
+        instance = self.instance
+        categorie = data.get('categorie', instance.categorie if instance else None)
+        nom = data.get('nom', instance.nom if instance else None)
+        volume = data.get('volume', instance.volume if instance else None)
+        
+        # Vérifier l'unicité (exclure le produit actuel)
+        queryset = Produit.objects.filter(
+            categorie=categorie,
+            nom=nom,
+            volume=volume
+        )
+        
+        if instance:
+            queryset = queryset.exclude(pk=instance.pk)
+        
+        if queryset.exists():
+            raise serializers.ValidationError(
+                "Un produit avec ce nom et ce volume existe déjà dans cette catégorie"
+            )
+        
+        return data
     
     def update(self, instance, validated_data):
-        logger.info(f"Mise à jour du produit : {instance.nom_complet}")
+        logger.info(f"Mise à jour du produit : {instance.nom}")
         
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
         instance.save()
-        logger.info(f"Produit mis à jour : {instance.nom_complet}")
+        logger.info(f"Produit mis à jour : {instance.nom}")
         return instance
 
 
@@ -141,13 +196,8 @@ class CategorieAvecProduitsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Categorie
         fields = [
-            'id',
-            'nom',
-            'description',
-            'actif',
-            'nombre_produits',
-            'produits',
-            'created_at',
-            'updated_at'
+            'id', 'nom', 'description', 'actif',
+            'nombre_produits', 'produits',
+            'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'nombre_produits', 'created_at', 'updated_at']
