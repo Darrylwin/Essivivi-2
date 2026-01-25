@@ -96,12 +96,10 @@ class LivraisonCreateView(APIView):
                 ),
                 'latitude': openapi.Schema(
                     type=openapi.TYPE_NUMBER,
-                    required=True,
                     description='Latitude GPS de l\'agent au moment de la livraison'
                 ),
                 'longitude': openapi.Schema(
                     type=openapi.TYPE_NUMBER,
-                    required=True,
                     description='Longitude GPS de l\'agent au moment de la livraison'
                 ),
             },
