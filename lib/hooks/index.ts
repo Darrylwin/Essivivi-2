@@ -10,3 +10,5 @@
 
 export { useAuth } from "./useAuth";
 export { useUsers } from "./useUsers";
+export { useOrders } from "./useOrders";
+export { useProducts } from "./useProducts";
