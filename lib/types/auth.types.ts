@@ -1,60 +1,77 @@
 /**
  * =====================================================
- * Types - Authentification & Utilisateurs
+ * Types - Authentification & Utilisateurs (Admin Web)
  * =====================================================
- * Définitions TypeScript pour l'auth et la gestion users
- *
+ * Définitions TypeScript pour l'auth admin web uniquement
+ * 
  * @module lib/types/auth.types
- * @version 1.0
+ * @version 2.0
  */
 
-// ========== PERMISSIONS ==========
-export type UserPermission = "admin";
-
-// ========== USER ==========
-export interface User {
-  id: string;
-  permissions: UserPermission;
+// ========== ADMIN USER ==========
+export interface Admin {
+  id: number;
+  nom: string;
+  prenom: string;
   email: string;
-  name?: string;
-  createdAt: string;
-  updatedAt?: string;
-  lastLogin?: string;
-  isActive?: boolean;
+  statut: 'actif' | 'inactif';
+  created_at?: string;
+  updated_at?: string;
 }
 
 // ========== AUTH REQUESTS ==========
-export interface LoginRequest {
+export interface AdminLoginRequest {
   email: string;
-  password: string;
-}
-
-export interface RefreshTokenRequest {
-  refreshToken: string;
+  mot_de_passe: string; // Note: mot_de_passe, pas password
 }
 
 // ========== AUTH RESPONSES ==========
-export interface AuthResponse {
+export interface AdminAuthResponse {
   message: string;
-  user: User;
-  refreshToken: string;
-  accessToken: string;
+  token: string; // JWT access token
+  refresh: string; // JWT refresh token
+  admin: Admin;
 }
 
-export interface RefreshTokenResponse {
-  refreshToken: string;
-  accessToken: string;
-  user?: User;
+export interface AdminErrorResponse {
+  error: string;
 }
 
-// ========== USER RESPONSES ==========
-export interface UserResponse {
-  user: User;
+// ========== ACCOUNT INFO ==========
+export interface AdminAccountInfo {
+  id: number;
+  email: string;
+  nom: string;
+  prenom: string;
+  statut: 'actif' | 'inactif';
+  date_inscription: string;
+  photo_url: string | null;
+}
+
+export interface AccountInfoResponse {
+  user_type: 'admin';
+  account_info: AdminAccountInfo;
+}
+
+// ========== CHANGE PASSWORD ==========
+export interface ChangePasswordRequest {
+  ancien_mot_de_passe: string;
+  nouveau_mot_de_passe: string;
+}
+
+export interface ChangePasswordResponse {
+  message: string;
+}
+
+// ========== UPDATE PHOTO ==========
+export interface UpdatePhotoResponse {
+  message: string;
+  photo_url: string | null;
 }
 
 // ========== AUTH STATE ==========
 export interface AuthState {
-  user: User | null;
+  user: Admin | null;
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
