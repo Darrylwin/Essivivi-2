@@ -2,28 +2,21 @@ from django.db import models
 
 
 class Categorie(models.Model):
-    """Catégories de produits (ex: Eaux, Jus, Sodas)"""
+    """
+    Catégories de produits pour ESSIVIVI
+    Exemples: Eau en sachet, Eau en bouteille, Boissons gazeuses, Jus
+    """
     
     nom = models.CharField(
         max_length=100,
         unique=True,
-        verbose_name='Nom de la catégorie'
+        verbose_name='Nom de la catégorie',
+        help_text='Ex: Eau en sachet, Eau en bouteille, Boissons'
     )
     description = models.TextField(
         blank=True,
         null=True,
         verbose_name='Description'
-    )
-    image = models.ImageField(
-        upload_to='categories/',
-        blank=True,
-        null=True,
-        verbose_name='Image de la catégorie'
-    )
-    ordre = models.IntegerField(
-        default=0,
-        verbose_name='Ordre d\'affichage',
-        help_text='Ordre d\'affichage dans l\'app mobile (0 = premier)'
     )
     actif = models.BooleanField(
         default=True,
@@ -37,108 +30,83 @@ class Categorie(models.Model):
         db_table = 'categories'
         verbose_name = 'Catégorie'
         verbose_name_plural = 'Catégories'
-        ordering = ['ordre', 'nom']
+        ordering = ['nom']
     
     def __str__(self):
         return self.nom
     
     @property
     def nombre_produits(self):
-        """Compte le nombre de produits dans cette catégorie"""
-        return self.produits.count()
+        """Compte le nombre de produits actifs dans cette catégorie"""
+        return self.produits.filter(actif=True).count()
 
 
 class Produit(models.Model):
-    """Produits vendus (ex: Eau Vitale 500ml, Eau Voltic 1.5L)"""
+    """
+    Produits vendus par ESSIVIVI
+    Exemples: Vitale 500ml, Voltic 1.5L, Coca-Cola 33cl
+    """
     
     UNITE_CHOICES = [
         ('sachet', 'Sachet'),
         ('bouteille', 'Bouteille'),
+        ('canette', 'Canette'),
         ('pack', 'Pack'),
-        ('carton', 'Carton'),
     ]
     
     categorie = models.ForeignKey(
         Categorie,
-        on_delete=models.PROTECT,  # On ne peut pas supprimer une catégorie qui a des produits
+        on_delete=models.PROTECT,
         related_name='produits',
         verbose_name='Catégorie'
     )
+    
+    # Informations de base
     nom = models.CharField(
         max_length=200,
-        verbose_name='Nom du produit'
+        verbose_name='Nom du produit',
+        help_text='Ex: Eau Vitale, Eau Voltic, Coca-Cola'
     )
-    description = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name='Description'
-    )
-    reference = models.CharField(
-        max_length=50,
-        unique=True,
-        verbose_name='Référence produit',
-        help_text='Ex: VIT-500, VOL-1500'
-    )
-    
-    # Caractéristiques
     marque = models.CharField(
         max_length=100,
-        blank=True,
-        null=True,
         verbose_name='Marque',
-        help_text='Ex: Vitale, Voltic, etc.'
+        help_text='Ex: Vitale, Voltic, Coca-Cola, Fanta'
     )
     volume = models.CharField(
         max_length=50,
         blank=True,
         null=True,
-        verbose_name='Volume',
-        help_text='Ex: 500ml, 1.5L, etc.'
+        verbose_name='Volume/Contenance',
+        help_text='Ex: 500ml, 1.5L, 33cl'
     )
+    
+    # Photo du produit
+    photo = models.ImageField(
+        upload_to='produits/',
+        blank=True,
+        null=True,
+        verbose_name='Photo du produit',
+        help_text='Image du produit'
+    )
+    
+    # Unité et prix
     unite_vente = models.CharField(
         max_length=20,
         choices=UNITE_CHOICES,
         default='sachet',
         verbose_name='Unité de vente'
     )
-    
-    # Prix
     prix_unitaire = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         verbose_name='Prix unitaire (FCFA)',
-        help_text='Prix de vente au détail'
-    )
-    prix_gros = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        blank=True,
-        null=True,
-        verbose_name='Prix de gros (FCFA)',
-        help_text='Prix pour les grossistes (optionnel)'
+        help_text='Prix de vente standard'
     )
     
-    # Stock (optionnel pour le moment)
-    stock_minimum = models.IntegerField(
-        default=0,
-        verbose_name='Stock minimum',
-        help_text='Alerte si stock en dessous'
-    )
-    
-    # Visibilité
-    image = models.ImageField(
-        upload_to='produits/',
-        blank=True,
-        null=True,
-        verbose_name='Photo du produit'
-    )
+    # Statut
     actif = models.BooleanField(
         default=True,
-        verbose_name='Produit actif'
-    )
-    ordre = models.IntegerField(
-        default=0,
-        verbose_name='Ordre d\'affichage'
+        verbose_name='Produit disponible à la vente'
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -148,11 +116,19 @@ class Produit(models.Model):
         db_table = 'produits'
         verbose_name = 'Produit'
         verbose_name_plural = 'Produits'
-        ordering = ['categorie', 'ordre', 'nom']
-        indexes = [
-            models.Index(fields=['categorie', 'actif']),
-            models.Index(fields=['reference']),
-        ]
+        ordering = ['categorie', 'marque', 'nom']
+        # Empêcher les doublons (même produit avec même volume)
+        unique_together = [['categorie', 'nom', 'volume']]
     
     def __str__(self):
-        return f"{self.nom} ({self.volume or self.unite_vente})"
+        if self.volume:
+            return f"{self.nom} {self.volume}"
+        return self.nom
+    
+    @property
+    def nom_complet(self):
+        """Retourne le nom complet du produit"""
+        parts = [self.nom]
+        if self.volume:
+            parts.append(self.volume)
+        return ' '.join(parts)

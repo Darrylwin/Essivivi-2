@@ -29,3 +29,4 @@ staticfiles/
 *.swo
 
 logs/*.log
+/logs

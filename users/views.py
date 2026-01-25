@@ -113,14 +113,32 @@ class AgentListView(APIView):
         
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-
 class AgentCreateView(APIView):
     """Créer un agent"""
     permission_classes = [IsAuthenticated, IsAdmin]
     
     @swagger_auto_schema(
         request_body=AgentCreateSerializer,
-        responses={201: AgentDetailSerializer()}
+        responses={
+            201: openapi.Response(
+                description="Agent créé avec succès",
+                examples={
+                    "application/json": {
+                        "agent": {
+                            "id": 1,
+                            "numero_identification": "AGT-123456",
+                            "nom": "Doe",
+                            "prenom": "John",
+                            "email": "john.doe@example.com",
+                            "statut": "actif"
+                        },
+                        "mot_de_passe_genere": "X7k9mP2qL5",
+                        "message": "Agent créé avec succès. Conservez le mot de passe généré."
+                    }
+                }
+            ),
+            400: "Erreur de validation"
+        }
     )
     def post(self, request):
         logger.info("Demande de création d'agent")
@@ -128,11 +146,23 @@ class AgentCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         agent = serializer.save()
         
+        # Construire la réponse
+        response_data = {
+            "agent": AgentDetailSerializer(agent).data
+        }
+        
+        # Ajouter le mot de passe généré s'il existe
+        if hasattr(agent, 'mot_de_passe_genere'):
+            response_data['mot_de_passe_genere'] = agent.mot_de_passe_genere
+            response_data['message'] = "Agent créé avec succès. Conservez le mot de passe généré en lieu sûr."
+            logger.warning(f"Mot de passe généré pour l'agent {agent.numero_identification}")
+        else:
+            response_data['message'] = "Agent créé avec succès."
+        
         return Response(
-            AgentDetailSerializer(agent).data,
+            response_data,
             status=status.HTTP_201_CREATED
         )
-
 
 class AgentDetailView(APIView):
     """Récupérer, modifier ou supprimer un agent"""
