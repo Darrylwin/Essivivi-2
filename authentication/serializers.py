@@ -109,3 +109,9 @@ class ClientRegisterSerializer(serializers.Serializer):
 class ResendOTPSerializer(serializers.Serializer):
     """Serializer pour renvoyer un OTP"""
     email = serializers.EmailField()
+
+# Ajoute cette classe dans serializers.py
+class AccountInfoSerializer(serializers.Serializer):
+    """Serializer pour les informations du compte"""
+    user_type = serializers.CharField()
+    account_info = serializers.DictField()

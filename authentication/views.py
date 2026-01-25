@@ -16,7 +16,7 @@ from .models import Admin, Agent, Client, PendingUser
 from .serializers import (
     AdminLoginSerializer, AdminSerializer, ClientRegisterSerializer, OTPRequestSerializer,
     OTPVerifySerializer, AgentProfileSerializer, ClientProfileSerializer,
-    ChangePasswordSerializer, ResendOTPSerializer, UpdatePhotoSerializer, 
+    ChangePasswordSerializer, ResendOTPSerializer, 
     MobileLoginSerializer
 )
 from .utils import create_otp, send_otp_email, verify_otp
@@ -579,7 +579,6 @@ class ChangePasswordView(APIView):
             "message": "Mot de passe modifié avec succès"
         }, status=status.HTTP_200_OK)
 
-
 class UpdatePhotoView(APIView):
     """Mettre à jour la photo de profil"""
     permission_classes = [IsAuthenticated]
@@ -601,7 +600,7 @@ class UpdatePhotoView(APIView):
                 examples={
                     "application/json": {
                         "message": "Photo mise à jour avec succès",
-                        "photo_url": "http://example.com/media/agents/photos/photo.jpg"
+                        "photo_url": "https://api.example.com/media/agents/photos/profil.jpg"
                     }
                 }
             ),
@@ -648,7 +647,7 @@ class UpdatePhotoView(APIView):
             logger.info(f"Photo mise à jour avec succès pour l'agent : {agent.numero_identification}")
             return Response({
                 "message": "Photo mise à jour avec succès",
-                "photo_url": agent.photo.url if agent.photo else None
+                "photo_url": request.build_absolute_uri(agent.photo.url) if agent.photo else None
             }, status=status.HTTP_200_OK)
         except Agent.DoesNotExist:
             pass
@@ -660,7 +659,7 @@ class UpdatePhotoView(APIView):
             logger.info(f"Photo mise à jour avec succès pour le client : {client.code_client}")
             return Response({
                 "message": "Photo mise à jour avec succès",
-                "photo_url": client.photo_point_vente.url if client.photo_point_vente else None
+                "photo_url": request.build_absolute_uri(client.photo_point_vente.url) if client.photo_point_vente else None
             }, status=status.HTTP_200_OK)
         except Client.DoesNotExist:
             pass
@@ -670,3 +669,116 @@ class UpdatePhotoView(APIView):
             {"error": "Impossible de mettre à jour la photo"},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+class AccountInfoView(APIView):
+    """Récupérer les informations du compte de l'utilisateur connecté"""
+    permission_classes = [IsAuthenticated]
+    
+    @swagger_auto_schema(
+        operation_description="Récupérer les informations détaillées du compte",
+        responses={
+            200: openapi.Response(
+                description="Informations du compte récupérées avec succès",
+                examples={
+                    "application/json": {
+                        "user_type": "agent",
+                        "account_info": {
+                            "id": 1,
+                            "email": "agent@example.com",
+                            "nom": "Doe",
+                            "prenom": "John",
+                            "numero_identification": "AGT-123456",
+                            "telephone": "+1234567890",
+                            "statut": "actif",
+                            "date_inscription": "2024-01-15T10:30:00Z",
+                            "photo_url": "https://api.example.com/media/agents/photos/profil.jpg"
+                        }
+                    }
+                }
+            ),
+            404: "Utilisateur non trouvé"
+        }
+    )
+    def get(self, request):
+        logger.info(f"Demande d'informations du compte pour : {request.user.email}")
+        
+        email = request.user.email
+        
+        # Chercher d'abord dans les agents
+        try:
+            agent = Agent.objects.get(email=email)
+            account_info = {
+                "id": agent.id,
+                "email": agent.email,
+                "nom": agent.nom,
+                "prenom": agent.prenom,
+                "numero_identification": agent.numero_identification,
+                "telephone": agent.telephone,
+                "statut": agent.statut,
+                "date_naissance": agent.date_naissance,
+                "adresse": agent.adresse,
+                "date_inscription": agent.created_at,
+                "photo_url": self._get_full_photo_url(request, agent.photo) if agent.photo else None,
+                "tricycle": agent.tricycle.plaque_immatriculation if agent.tricycle else None
+            }
+            user_type = "agent"
+            logger.info(f"Informations du compte agent récupérées : {agent.numero_identification}")
+            
+        except Agent.DoesNotExist:
+            # Chercher dans les clients
+            try:
+                client = Client.objects.get(email=email)
+                account_info = {
+                    "id": client.id,
+                    "email": client.email,
+                    "nom_point_vente": client.nom_point_vente,
+                    "nom_responsable": client.nom_responsable,
+                    "telephone": client.telephone,
+                    "code_client": client.code_client,
+                    "statut": client.statut,
+                    "adresse": client.adresse,
+                    "latitude": float(client.latitude) if client.latitude else None,
+                    "longitude": float(client.longitude) if client.longitude else None,
+                    "type_client": client.type_client,
+                    "date_inscription": client.date_inscription,
+                    "photo_url": self._get_full_photo_url(request, client.photo_point_vente) if client.photo_point_vente else None
+                }
+                user_type = "client"
+                logger.info(f"Informations du compte client récupérées : {client.code_client}")
+                
+            except Client.DoesNotExist:
+                # Chercher dans les admins
+                try:
+                    admin = Admin.objects.get(email=email)
+                    account_info = {
+                        "id": admin.id,
+                        "email": admin.email,
+                        "nom": admin.nom,
+                        "prenom": admin.prenom,
+                        "statut": admin.statut,
+                        "date_inscription": admin.created_at,
+                        "photo_url": None  # Les admins n'ont pas de photo
+                    }
+                    user_type = "admin"
+                    logger.info(f"Informations du compte admin récupérées : {admin.email}")
+                    
+                except Admin.DoesNotExist:
+                    logger.error(f"Utilisateur non trouvé pour l'email : {email}")
+                    return Response(
+                        {"error": "Utilisateur non trouvé"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+        
+        return Response({
+            "user_type": user_type,
+            "account_info": account_info
+        }, status=status.HTTP_200_OK)
+    
+    def _get_full_photo_url(self, request, photo_field):
+        """Retourne l'URL complète d'une photo"""
+        if not photo_field:
+            return None
+        
+        # Construire l'URL complète
+        return request.build_absolute_uri(photo_field.url)
+    
