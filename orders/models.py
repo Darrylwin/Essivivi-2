@@ -7,11 +7,11 @@ class Commande(models.Model):
     """Modèle pour les commandes passées par les clients"""
     
     STATUT_CHOICES = [
-        ('en_attente', 'En attente'),
-        ('acceptee', 'Acceptée'),
-        ('en_cours', 'En cours de livraison'),
-        ('livree', 'Livrée'),
-        ('annulee', 'Annulée'),
+        ('en_attente', 'En attente'),      # Client a créé, pas encore assignée
+        ('acceptee', 'Acceptée'),          # Admin a assigné à un agent
+        ('en_cours', 'En cours de livraison'),  # Agent a démarré tournée
+        ('livree', 'Livrée'),              # Toutes livraisons terminées
+        ('annulee', 'Annulée'),            # Commande annulée
     ]
     
     client = models.ForeignKey(
@@ -67,6 +67,20 @@ class Commande(models.Model):
         verbose_name = 'Commande'
         verbose_name_plural = 'Commandes'
         ordering = ['-created_at']
+        
+        # CONTRAINTE: Un agent ne peut avoir qu'UNE seule commande active
+        constraints = [
+            models.UniqueConstraint(
+                fields=['agent'],
+                condition=models.Q(statut__in=['acceptee', 'en_cours']),
+                name='unique_agent_commande_active'
+            )
+        ]
+        
+        indexes = [
+            models.Index(fields=['agent', 'statut']),
+            models.Index(fields=['client', 'statut']),
+        ]
     
     def __str__(self):
         agent_info = f" → {self.agent.numero_identification}" if self.agent else " (non assignée)"
@@ -76,6 +90,21 @@ class Commande(models.Model):
     def est_assignee(self):
         """Vérifie si la commande est assignée à un agent"""
         return self.agent is not None
+    
+    @property
+    def est_en_cours(self):
+        """Vérifie si la commande est en cours de livraison"""
+        return self.statut == 'en_cours'
+    
+    @property
+    def peut_etre_modifiee(self):
+        """Vérifie si la commande peut encore être modifiée"""
+        return self.statut == 'en_attente'
+    
+    @property
+    def peut_etre_assignee(self):
+        """Vérifie si la commande peut être assignée à un agent"""
+        return self.statut == 'en_attente'
     
     @property
     def montant_total(self):
@@ -109,6 +138,30 @@ class Commande(models.Model):
         
         distance = R * c
         return round(distance, 2)
+    
+    @staticmethod
+    def agent_peut_recevoir_commande(agent):
+        """
+        Vérifie si un agent peut recevoir une nouvelle commande
+        
+        Conditions:
+        1. Agent doit être actif (pas en tournée, pas inactif)
+        2. Agent ne doit pas avoir de commande en cours
+        """
+        # Vérifier le statut de l'agent
+        if agent.statut != 'actif':
+            return False, f"Agent {agent.numero_identification} n'est pas disponible (statut: {agent.statut})"
+        
+        # Vérifier qu'il n'a pas de commande active
+        commande_active = Commande.objects.filter(
+            agent=agent,
+            statut__in=['acceptee', 'en_cours']
+        ).first()
+        
+        if commande_active:
+            return False, f"Agent {agent.numero_identification} a déjà une commande en cours (#{commande_active.id})"
+        
+        return True, "Agent disponible"
 
 
 class LigneCommande(models.Model):

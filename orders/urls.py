@@ -6,6 +6,10 @@ from .views import (
     CommandeAssignView,
     CommandeStatusView,
     
+    # NOUVEAUX ENDPOINTS
+    AgentsDisponiblesView,
+    AgentCommandeEnCoursView,
+    
     # Notifications
     NotificationListView,
     NotificationMarkAsReadView,
@@ -24,6 +28,13 @@ urlpatterns = [
     
     # PATCH: Changer le statut d'une commande (Admin ou Agent assigné)
     path('orders/<int:pk>/status', CommandeStatusView.as_view(), name='order-status'),
+    
+    # ==================== NOUVEAUX ENDPOINTS ====================
+    # GET: Liste agents disponibles pour assignation (Admin)
+    path('orders/available-agents', AgentsDisponiblesView.as_view(), name='order-available-agents'),
+    
+    # GET: Commande en cours de l'agent connecté (Agent)
+    path('orders/agent-current-order', AgentCommandeEnCoursView.as_view(), name='order-agent-current'),
     
     # ==================== NOTIFICATIONS ====================
     # GET: Liste notifications

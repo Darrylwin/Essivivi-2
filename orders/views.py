@@ -77,26 +77,6 @@ class CommandeListCreateView(APIView):
                 description="Rechercher par nom de client ou code",
                 type=openapi.TYPE_STRING
             ),
-            openapi.Parameter(
-                'lat',
-                openapi.IN_QUERY,
-                description="Latitude pour filtrer par proximité (optionnel avec lon)",
-                type=openapi.TYPE_NUMBER,
-                format='decimal'
-            ),
-            openapi.Parameter(
-                'lon',
-                openapi.IN_QUERY,
-                description="Longitude pour filtrer par proximité (optionnel avec lat)",
-                type=openapi.TYPE_NUMBER,
-                format='decimal'
-            ),
-            openapi.Parameter(
-                'distance_max',
-                openapi.IN_QUERY,
-                description="Distance maximale en mètres pour le filtrage par proximité (défaut: 5000)",
-                type=openapi.TYPE_NUMBER
-            ),
         ],
         responses={200: CommandeListSerializer(many=True)}
     )
@@ -150,63 +130,6 @@ class CommandeListCreateView(APIView):
                 Q(client__code_client__icontains=search)
             )
             logger.info(f"Recherche : {search}")
-        
-        # Filtrage par proximité géographique
-        lat = request.query_params.get('lat')
-        lon = request.query_params.get('lon')
-        if lat and lon:
-            try:
-                from math import radians, sin, cos, sqrt, atan2
-                
-                lat_float = float(lat)
-                lon_float = float(lon)
-                distance_max = float(request.query_params.get('distance_max', 5000))
-                
-                # Rayon de la Terre en mètres
-                R = 6371000
-                
-                # Convertir latitude en radians
-                lat_rad = radians(lat_float)
-                
-                # Filtre approximatif d'abord (carré)
-                deg_per_km = 0.009  # Environ 1km en degrés
-                max_distance_deg = (distance_max / 1000) * deg_per_km
-                
-                commandes = commandes.filter(
-                    latitude_livraison__range=(lat_float - max_distance_deg, lat_float + max_distance_deg),
-                    longitude_livraison__range=(lon_float - max_distance_deg, lon_float + max_distance_deg)
-                )
-                
-                # Calculer la distance exacte pour chaque commande
-                commandes_list = list(commandes)
-                filtered_commandes = []
-                
-                for commande in commandes_list:
-                    try:
-                        cmd_lat = radians(float(commande.latitude_livraison))
-                        cmd_lon = radians(float(commande.longitude_livraison))
-                        
-                        dlat = cmd_lat - lat_rad
-                        dlon = cmd_lon - radians(lon_float)
-                        
-                        a = sin(dlat/2)**2 + cos(lat_rad) * cos(cmd_lat) * sin(dlon/2)**2
-                        c = 2 * atan2(sqrt(a), sqrt(1-a))
-                        distance = R * c
-                        
-                        if distance <= distance_max:
-                            filtered_commandes.append(commande)
-                    except (TypeError, ValueError):
-                        continue
-                
-                from django.core.paginator import Paginator
-                # Recréer un queryset avec les IDs filtrés
-                commande_ids = [cmd.id for cmd in filtered_commandes]
-                commandes = Commande.objects.filter(id__in=commande_ids).order_by('-created_at')
-                
-                logger.info(f"Filtre proximité : {lat}, {lon} - {len(filtered_commandes)} commandes dans un rayon de {distance_max}m")
-                
-            except (ValueError, TypeError) as e:
-                logger.error(f"Erreur filtrage proximité : {e}")
         
         serializer = CommandeListSerializer(commandes, many=True)
         logger.info(f"{commandes.count()} commandes trouvées")
@@ -301,7 +224,6 @@ class CommandeDetailView(APIView):
         
         # Vérifier les permissions
         if user_type == 'admin':
-            # Admin peut toujours modifier
             pass
         elif user_type == 'client':
             if commande.client != user_instance:
@@ -410,25 +332,83 @@ class CommandeAssignView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
     
     @swagger_auto_schema(
-        operation_description="Assigne une commande à un agent",
+        operation_description="""
+        Assigne une commande à un agent DISPONIBLE.
+        
+        **Conditions strictes:**
+        1. Commande doit être en statut 'en_attente'
+        2. Agent doit être en statut 'actif' (disponible)
+        3. Agent ne doit PAS avoir d'autre commande en cours
+        4. Agent doit exister et être actif
+        
+        **Après assignation:**
+        - Commande.statut → 'acceptee'
+        - Commande.agent → agent choisi
+        - Notification envoyée à l'agent
+        - Notification envoyée au client
+        
+        **Important:** L'agent devra démarrer une tournée avant de pouvoir livrer.
+        """,
         request_body=CommandeAssignSerializer,
-        responses={200: CommandeDetailSerializer()}
+        responses={
+            200: CommandeDetailSerializer(),
+            400: "Agent non disponible ou commande non assignable",
+            404: "Commande ou agent non trouvé"
+        }
     )
     def post(self, request, pk):
         """Assigne un agent à la commande"""
         logger.info(f"Assignation commande #{pk}")
         commande = get_object_or_404(Commande, pk=pk)
         
+        # ===== VALIDATION 1: Commande doit être en attente =====
+        if not commande.peut_etre_assignee:
+            return Response(
+                {
+                    'error': f"Cette commande ne peut pas être assignée (statut actuel: {commande.statut})",
+                    'detail': 'Seules les commandes en attente peuvent être assignées'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         serializer = CommandeAssignSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         agent = Agent.objects.get(id=serializer.validated_data['agent_id'])
         
+        # ===== VALIDATION 2: Agent peut recevoir une commande =====
+        peut_recevoir, message = Commande.agent_peut_recevoir_commande(agent)
+        
+        if not peut_recevoir:
+            logger.warning(f"Assignation refusée pour commande #{pk}: {message}")
+            return Response(
+                {
+                    'error': 'Agent non disponible',
+                    'detail': message,
+                    'agent_statut': agent.statut,
+                    'suggestion': 'Choisissez un agent avec statut "actif" et sans commande en cours'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # ===== ASSIGNATION =====
         old_agent = commande.agent
         commande.agent = agent
         commande.statut = 'acceptee'
-        commande.save()
         
+        try:
+            commande.save()
+        except Exception as e:
+            logger.error(f"Erreur lors de l'assignation: {str(e)}")
+            return Response(
+                {
+                    'error': 'Erreur lors de l\'assignation',
+                    'detail': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # ===== NOTIFICATIONS =====
         # Notification pour l'agent
         Notification.objects.create(
             type='livraison_assignee',
@@ -438,8 +418,9 @@ class CommandeAssignView(APIView):
             titre='Nouvelle commande assignée',
             message=(
                 f"Commande #{commande.id} vous a été assignée. "
-                f"Client : {commande.client.nom_point_vente} - "
-                f"Localisation: {commande.latitude_livraison}, {commande.longitude_livraison}"
+                f"Client : {commande.client.nom_point_vente}. "
+                f"Démarrez une tournée pour commencer les livraisons. "
+                f"Point de livraison: {commande.latitude_livraison}, {commande.longitude_livraison}"
             )
         )
         
@@ -449,7 +430,10 @@ class CommandeAssignView(APIView):
             client=commande.client,
             commande=commande,
             titre='Commande acceptée',
-            message=f"Votre commande #{commande.id} a été acceptée et assignée à un agent"
+            message=(
+                f"Votre commande #{commande.id} a été acceptée et assignée à un agent. "
+                f"Vous serez notifié lorsque l'agent démarrera sa tournée."
+            )
         )
         
         if old_agent:
@@ -458,10 +442,14 @@ class CommandeAssignView(APIView):
                 f"{old_agent.numero_identification} → {agent.numero_identification}"
             )
         else:
-            logger.info(f"Commande #{commande.id} assignée à {agent.numero_identification}")
+            logger.info(
+                f"Commande #{commande.id} assignée à {agent.numero_identification}. "
+                f"Agent peut maintenant démarrer une tournée."
+            )
         
         return Response({
             'message': 'Commande assignée avec succès',
+            'instructions': 'L\'agent doit démarrer une tournée avant de pouvoir livrer',
             'commande': CommandeDetailSerializer(commande).data
         }, status=status.HTTP_200_OK)
 
@@ -512,7 +500,7 @@ class CommandeStatusView(APIView):
                 client=commande.client,
                 commande=commande,
                 titre='Commande livrée',
-                message=f"Votre commande #{commande.id} a été livrée avec succès à {commande.latitude_livraison}, {commande.longitude_livraison}"
+                message=f"Votre commande #{commande.id} a été livrée avec succès"
             )
         
         # Notification si annulée
@@ -530,6 +518,126 @@ class CommandeStatusView(APIView):
         return Response({
             'message': f'Statut changé : {old_statut} → {new_statut}',
             'commande': CommandeDetailSerializer(commande).data
+        }, status=status.HTTP_200_OK)
+
+
+class AgentsDisponiblesView(APIView):
+    """Liste des agents disponibles pour assignation (Admin uniquement)"""
+    permission_classes = [IsAuthenticated, IsAdmin]
+    
+    @swagger_auto_schema(
+        operation_description="""Liste tous les agents DISPONIBLES pour recevoir une commande.
+        
+        **Critères de disponibilité:**
+        - Statut = 'actif' (pas en tournée, pas inactif)
+        - Aucune commande en cours (statut acceptée ou en_cours)
+        
+        **Retourne:**
+        - Liste des agents disponibles
+        - Leur dernière position GPS (si disponible)
+        - Nombre total d'agents disponibles
+        """,
+        responses={200: "Liste des agents disponibles"}
+    )
+    def get(self, request):
+        """Liste les agents disponibles"""
+        logger.info("Récupération des agents disponibles pour assignation")
+        
+        # Agents actifs sans commande en cours
+        agents_disponibles = Agent.objects.filter(
+            statut='actif'
+        ).exclude(
+            commandes__statut__in=['acceptee', 'en_cours']
+        ).select_related('tricycle').order_by('numero_identification')
+        
+        # Formater la réponse
+        from tracking.models import PositionAgent
+        
+        agents_data = []
+        for agent in agents_disponibles:
+            # Récupérer dernière position
+            derniere_position = PositionAgent.get_derniere_position(agent)
+            
+            agent_info = {
+                'id': agent.id,
+                'numero_identification': agent.numero_identification,
+                'nom': agent.nom,
+                'prenom': agent.prenom,
+                'telephone': agent.telephone,
+                'statut': agent.statut,
+                'tricycle': agent.tricycle.plaque_immatriculation if agent.tricycle else None,
+                'derniere_position': None
+            }
+            
+            if derniere_position:
+                agent_info['derniere_position'] = {
+                    'latitude': float(derniere_position.latitude),
+                    'longitude': float(derniere_position.longitude),
+                    'timestamp': derniere_position.timestamp
+                }
+            
+            agents_data.append(agent_info)
+        
+        logger.info(f"{len(agents_data)} agents disponibles trouvés")
+        
+        return Response({
+            'count': len(agents_data),
+            'agents': agents_data,
+            'note': 'Ces agents peuvent recevoir une commande immédiatement'
+        }, status=status.HTTP_200_OK)
+
+
+class AgentCommandeEnCoursView(APIView):
+    """Récupère la commande en cours de l'agent connecté"""
+    permission_classes = [IsAuthenticated]
+    
+    @swagger_auto_schema(
+        operation_description="""Récupère la commande actuellement assignée à l'agent connecté.
+        
+        **Retourne:**
+        - Détails de la commande si elle existe
+        - null si aucune commande active
+        
+        **Statuts possibles:**
+        - acceptee: Commande assignée, agent doit démarrer tournée
+        - en_cours: Tournée démarrée, agent peut livrer
+        """,
+        responses={200: "Commande en cours"}
+    )
+    def get(self, request):
+        """Récupère la commande en cours"""
+        logger.info(f"Récupération commande en cours pour {request.user.email}")
+        
+        try:
+            agent = Agent.objects.get(email=request.user.email)
+        except Agent.DoesNotExist:
+            return Response(
+                {'error': 'Agent non trouvé'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Chercher commande en cours
+        commande = Commande.objects.filter(
+            agent=agent,
+            statut__in=['acceptee', 'en_cours']
+        ).select_related('client').prefetch_related('lignes').first()
+        
+        if not commande:
+            return Response({
+                'has_commande': False,
+                'message': 'Aucune commande assignée. Vous êtes disponible.',
+                'agent_statut': agent.statut
+            }, status=status.HTTP_200_OK)
+        
+        return Response({
+            'has_commande': True,
+            'commande': CommandeDetailSerializer(commande).data,
+            'peut_demarrer_tournee': commande.statut == 'acceptee' and agent.statut == 'actif',
+            'instructions': (
+                'Démarrez une tournée pour commencer les livraisons' 
+                if commande.statut == 'acceptee' 
+                else 'Tournée en cours, effectuez les livraisons'
+            )
         }, status=status.HTTP_200_OK)
 
 
@@ -558,7 +666,6 @@ class NotificationListView(APIView):
         user_type, user_instance = get_user_type(request.user)
         
         if user_type == 'admin':
-            # Admin voit toutes les notifications (nouvelles commandes notamment)
             notifications = Notification.objects.all()
         elif user_type == 'agent':
             notifications = Notification.objects.filter(agent=user_instance)

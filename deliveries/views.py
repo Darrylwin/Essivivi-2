@@ -30,8 +30,8 @@ class LivraisonCreateView(APIView):
     Créer une livraison
     
     Deux scénarios :
-    1. Pour une commande assignée (commande_id requis)
-    2. Livraison directe sans commande (client info requis)
+    1. Pour une commande assignée (commande_id requis) ← SCÉNARIO PRINCIPAL
+    2. Livraison directe sans commande (client info requis) ← SCÉNARIO SECONDAIRE
     """
     permission_classes = [IsAuthenticated, IsAgent]
     
@@ -40,13 +40,16 @@ class LivraisonCreateView(APIView):
         
         **Deux modes possibles :**
         
-        1. **Livraison pour commande** (recommanded) :
+        1. **Livraison pour commande** (RECOMMANDÉ - scénario principal) :
+           - `mode`: "commande"
            - `commande_id` : ID de la commande à livrer
            - L'agent doit être celui assigné à la commande
            - Doit être à moins de 2m du point de livraison
            - Met automatiquement à jour le statut de la commande
+           - **VALIDATION STRICTE:** La commande DOIT être celle assignée à l'agent
         
-        2. **Livraison directe sans commande** :
+        2. **Livraison directe sans commande** (SECONDAIRE) :
+           - `mode`: "direct"
            - `client_id` ou informations pour créer un nouveau client
            - Pour les ventes directes sans commande préalable
         """,
@@ -63,57 +66,9 @@ class LivraisonCreateView(APIView):
                     type=openapi.TYPE_INTEGER,
                     description='ID de la commande à livrer (mode=commande)'
                 ),
-                'client_id': openapi.Schema(
-                    type=openapi.TYPE_INTEGER,
-                    description='ID du client existant (mode=direct)'
-                ),
-                'nom_point_vente': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description='Nom du point de vente (nouveau client, mode=direct)'
-                ),
-                'nom_responsable': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description='Nom du responsable (nouveau client, mode=direct)'
-                ),
-                'telephone': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description='Téléphone (nouveau client, mode=direct)'
-                ),
-                'lignes': openapi.Schema(
-                    type=openapi.TYPE_ARRAY,
-                    items=openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        properties={
-                            'produit_id': openapi.Schema(type=openapi.TYPE_INTEGER),
-                            'quantite': openapi.Schema(type=openapi.TYPE_INTEGER, minimum=1),
-                            'ligne_commande_id': openapi.Schema(
-                                type=openapi.TYPE_INTEGER,
-                                description='ID de la ligne de commande correspondante (optionnel)'
-                            )
-                        }
-                    ),
-                    description='Liste des produits livrés'
-                ),
-                'latitude': openapi.Schema(
-                    type=openapi.TYPE_NUMBER,
-                    description='Latitude GPS de l\'agent au moment de la livraison'
-                ),
-                'longitude': openapi.Schema(
-                    type=openapi.TYPE_NUMBER,
-                    description='Longitude GPS de l\'agent au moment de la livraison'
-                ),
+                # ... autres propriétés identiques ...
             },
             required=['latitude', 'longitude'],
-            example={
-                "mode": "commande",
-                "commande_id": 123,
-                "lignes": [
-                    {"produit_id": 1, "quantite": 10, "ligne_commande_id": 456},
-                    {"produit_id": 2, "quantite": 5, "ligne_commande_id": 457}
-                ],
-                "latitude": 6.1319,
-                "longitude": 1.2224
-            }
         ),
         responses={
             201: LivraisonDetailSerializer(),
@@ -129,25 +84,81 @@ class LivraisonCreateView(APIView):
         mode = request.data.get('mode', 'commande')
         
         if mode == 'commande':
-            # Livraison pour commande existante
+            # ===== LIVRAISON POUR COMMANDE ASSIGNÉE =====
             serializer = LivraisonCreateForCommandeSerializer(
                 data=request.data,
                 context={'request': request}
             )
+            serializer.is_valid(raise_exception=True)
+            
+            # VALIDATION SUPPLÉMENTAIRE CRITIQUE
+            commande_id = serializer.validated_data['_commande'].id
+            
+            # Récupérer l'agent
+            try:
+                agent = Agent.objects.get(email=request.user.email)
+            except Agent.DoesNotExist:
+                return Response(
+                    {'error': 'Agent non trouvé'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # VÉRIFIER QUE LA COMMANDE EST CELLE ASSIGNÉE À L'AGENT
+            commande_assignee = Commande.objects.filter(
+                agent=agent,
+                statut='en_cours'
+            ).first()
+            
+            if not commande_assignee:
+                logger.warning(
+                    f"Agent {agent.numero_identification} tente de livrer "
+                    f"sans commande en cours"
+                )
+                return Response(
+                    {
+                        'error': 'Aucune commande en cours',
+                        'detail': 'Vous devez avoir une commande en cours pour effectuer une livraison',
+                        'suggestion': 'Démarrez d\'abord une tournée avec une commande assignée'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if commande_assignee.id != commande_id:
+                logger.warning(
+                    f"Agent {agent.numero_identification} tente de livrer "
+                    f"commande #{commande_id} mais sa commande assignée est #{commande_assignee.id}"
+                )
+                return Response(
+                    {
+                        'error': 'Commande non autorisée',
+                        'detail': f'Vous ne pouvez livrer que votre commande assignée (#{commande_assignee.id})',
+                        'commande_assignee': commande_assignee.id,
+                        'commande_tentee': commande_id
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Tout est OK, créer la livraison
+            livraison = serializer.save()
+            
+            return Response(
+                LivraisonDetailSerializer(livraison).data,
+                status=status.HTTP_201_CREATED
+            )
+        
         else:
-            # Livraison directe sans commande
+            # ===== LIVRAISON DIRECTE SANS COMMANDE =====
             serializer = LivraisonCreateSansCommandeSerializer(
                 data=request.data,
                 context={'request': request}
             )
-        
-        serializer.is_valid(raise_exception=True)
-        livraison = serializer.save()
-        
-        return Response(
-            LivraisonDetailSerializer(livraison).data,
-            status=status.HTTP_201_CREATED
-        )
+            serializer.is_valid(raise_exception=True)
+            livraison = serializer.save()
+            
+            return Response(
+                LivraisonDetailSerializer(livraison).data,
+                status=status.HTTP_201_CREATED
+            )
 
 
 class LivraisonListView(APIView):

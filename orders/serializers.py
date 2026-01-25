@@ -26,8 +26,14 @@ class LigneCommandeSerializer(serializers.ModelSerializer):
 
 class LigneCommandeCreateSerializer(serializers.Serializer):
     """Serializer pour créer une ligne de commande"""
-    produit_id = serializers.IntegerField(min_value=1)
-    quantite = serializers.IntegerField(min_value=1)
+    produit_id = serializers.IntegerField(
+        min_value=1,
+        help_text="ID du produit à commander"
+    )
+    quantite = serializers.IntegerField(
+        min_value=1,
+        help_text="Quantité à commander (minimum 1)"
+    )
     
     def validate_produit_id(self, value):
         """Vérifier que le produit existe et est actif"""
@@ -50,7 +56,7 @@ class CommandeCreateSerializer(serializers.Serializer):
         required=True,
         min_value=-90,
         max_value=90,
-        help_text="Latitude du point de livraison (-90 à 90)"
+        help_text="Latitude du point de livraison (-90 à 90). Exemple: 6.1319"
     )
     longitude_livraison = serializers.DecimalField(
         max_digits=11,
@@ -58,16 +64,16 @@ class CommandeCreateSerializer(serializers.Serializer):
         required=True,
         min_value=-180,
         max_value=180,
-        help_text="Longitude du point de livraison (-180 à 180)"
+        help_text="Longitude du point de livraison (-180 à 180). Exemple: 1.2224"
     )
     utiliser_coordonnees_client = serializers.BooleanField(
         required=False,
         default=False,
-        help_text="Si True, utilise les coordonnées GPS du client au lieu de celles fournies"
+        help_text="Si true, utilise les coordonnées GPS enregistrées du client au lieu de celles fournies"
     )
     lignes = LigneCommandeCreateSerializer(
         many=True,
-        help_text="Liste des produits à commander"
+        help_text="Liste des produits à commander (minimum 1 produit)"
     )
     
     def validate_lignes(self, value):
@@ -207,6 +213,16 @@ class CommandeListSerializer(serializers.ModelSerializer):
             'statut', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+        extra_kwargs = {
+            'statut': {
+                'help_text': """Statut de la commande:
+                - en_attente: Client a créé, pas encore assignée
+                - acceptee: Admin a assigné à un agent
+                - en_cours: Agent en tournée
+                - livree: Livraisons terminées
+                - annulee: Commande annulée"""
+            }
+        }
     
     def get_agent_nom(self, obj):
         """Retourne le nom complet de l'agent"""
@@ -343,7 +359,10 @@ class CommandeUpdateSerializer(serializers.ModelSerializer):
 
 class CommandeAssignSerializer(serializers.Serializer):
     """Serializer pour assigner une commande à un agent (Admin)"""
-    agent_id = serializers.IntegerField(min_value=1)
+    agent_id = serializers.IntegerField(
+        min_value=1,
+        help_text="ID de l'agent à qui assigner la commande. L'agent doit être en statut 'actif' et ne pas avoir d'autre commande en cours."
+    )
     
     def validate_agent_id(self, value):
         """Vérifier que l'agent existe et est actif"""
@@ -359,7 +378,21 @@ class CommandeAssignSerializer(serializers.Serializer):
 class CommandeStatusSerializer(serializers.Serializer):
     """Serializer pour changer le statut d'une commande"""
     statut = serializers.ChoiceField(
-        choices=['en_attente', 'acceptee', 'en_cours', 'livree', 'annulee']
+        choices=[
+            ('en_attente', 'En attente'),
+            ('acceptee', 'Acceptée'),
+            ('en_cours', 'En cours de livraison'),
+            ('livree', 'Livrée'),
+            ('annulee', 'Annulée')
+        ],
+        help_text="""Nouveau statut:
+        - en_attente: Client a créé, pas encore assignée
+        - acceptee: Admin a assigné à un agent
+        - en_cours: Agent en tournée
+        - livree: Livraisons terminées
+        - annulee: Commande annulée
+        
+        Note: Transitions automatiques normalement gérées par le système"""
     )
     
     def validate_statut(self, value):
@@ -432,3 +465,12 @@ class NotificationSerializer(serializers.ModelSerializer):
             'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+        extra_kwargs = {
+            'type': {
+                'help_text': """Type de notification:
+                - nouvelle_commande: Nouvelle commande créée
+                - livraison_assignee: Commande assignée à un agent
+                - livraison_terminee: Livraison terminée
+                - commande_annulee: Commande annulée"""
+            }
+        }
