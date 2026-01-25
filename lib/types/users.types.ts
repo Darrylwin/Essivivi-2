@@ -120,7 +120,7 @@ export interface ClientUpdateRequest {
 }
 
 // ========== RESPONSES ==========
-export interface ListResponse<T> {
+interface ListResponse<T> {
   count: number;
   results: T[];
 }
@@ -137,10 +137,6 @@ export interface AgentDetailResponse {
 export interface ClientDetailResponse {
   client: ClientDetail;
   message?: string;
-}
-
-export interface SimpleMessageResponse {
-  message: string;
 }
 
 // ========== QUERY PARAMS ==========
