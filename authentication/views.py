@@ -178,7 +178,7 @@ class MobileLoginView(APIView):
         
         # ÉTAPE 4 : Générer et envoyer l'OTP
         otp_code = create_otp(email, user_type)
-        email_sent = send_otp_email(email, otp_code)
+        email_sent = send_otp_email(email, otp_code, user_type)
         
         if email_sent:
             logger.info(f"OTP envoyé avec succès à {email}")
@@ -363,6 +363,8 @@ class OTPVerifyView(APIView):
             "user_type": user_type,
             "user": user_data
         }, status=status.HTTP_200_OK)
+
+
 class ClientRegisterView(APIView):
     """Inscription d'un nouveau client avec OTP"""
     permission_classes = [AllowAny]
@@ -427,7 +429,7 @@ class ClientRegisterView(APIView):
         )
         
         # Envoyer l'OTP par email
-        email_sent = send_otp_email(email, otp_code)
+        email_sent = send_otp_email(email, otp_code, 'client')
         
         if email_sent:
             logger.info(f"OTP envoyé à {email} pour inscription client")
@@ -443,6 +445,7 @@ class ClientRegisterView(APIView):
             # À SUPPRIMER EN PRODUCTION
             "otp": otp_code  # Pour faciliter les tests
         }, status=status.HTTP_201_CREATED)
+
 
 class ResendOTPView(APIView):
     """Renvoyer un OTP pour inscription client"""
@@ -480,7 +483,7 @@ class ResendOTPView(APIView):
         pending_user.save()
         
         # Envoyer l'OTP
-        email_sent = send_otp_email(email, otp_code)
+        email_sent = send_otp_email(email, otp_code, 'client')
         
         if email_sent:
             logger.info(f"Nouvel OTP envoyé à {email}")
@@ -494,6 +497,7 @@ class ResendOTPView(APIView):
             # À SUPPRIMER EN PRODUCTION
             "otp": otp_code
         }, status=status.HTTP_200_OK)
+
 
 class AccountInfoView(APIView):
     """Récupérer les informations du compte de l'utilisateur connecté"""
@@ -606,4 +610,3 @@ class AccountInfoView(APIView):
         
         # Construire l'URL complète
         return request.build_absolute_uri(photo_field.url)
-    

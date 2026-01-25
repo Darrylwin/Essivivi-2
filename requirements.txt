@@ -1,9 +1,9 @@
-django
+Django
 djangorestframework
 psycopg2-binary
 python-decouple
 djangorestframework-simplejwt
-pillow
+Pillow
 drf-yasg
 python-dotenv
 django-cors-headers
