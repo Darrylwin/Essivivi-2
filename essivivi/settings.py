@@ -42,28 +42,76 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose'
         },
-        'file': {
+        'root_file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'essivivi.log',
+            'filename': str(BASE_DIR / 'logs' / 'essivivi.log'),
             'formatter': 'verbose',
         },
         'error_file': {
             'level': 'ERROR',
             'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'errors.log',
+            'filename': str(BASE_DIR / 'logs' / 'errors.log'),
             'formatter': 'verbose',
         },
-        'auth_file': {
+        'authentication_file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'authentication.log',
+            'filename': str(BASE_DIR / 'logs' / 'authentication.log'),
+            'formatter': 'verbose',
+        },
+        'users_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'users.log'),
+            'formatter': 'verbose',
+        },
+        'products_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'products.log'),
+            'formatter': 'verbose',
+        },
+        'tours_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'tours.log'),
+            'formatter': 'verbose',
+        },
+        'deliveries_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'deliveries.log'),
+            'formatter': 'verbose',
+        },
+        'orders_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'orders.log'),
+            'formatter': 'verbose',
+        },
+        'tracking_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'tracking.log'),
+            'formatter': 'verbose',
+        },
+        'dashboard_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'dashboard.log'),
+            'formatter': 'verbose',
+        },
+        'api_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'api.log'),
             'formatter': 'verbose',
         },
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'root_file'],
             'level': 'INFO',
             'propagate': False,
         },
@@ -73,48 +121,53 @@ LOGGING = {
             'propagate': False,
         },
         'authentication': {
-            'handlers': ['console', 'auth_file'],
+            'handlers': ['console', 'authentication_file'],
             'level': 'INFO',
             'propagate': False,
         },
-        'api': {
-            'handlers': ['console', 'file'],
+        'users': {
+            'handlers': ['console', 'users_file'],
             'level': 'INFO',
             'propagate': False,
         },
         'products': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'products_file'],
             'level': 'INFO',
             'propagate': False,
         },
         'tours': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'tours_file'],
             'level': 'INFO',
             'propagate': False,
         },
         'deliveries': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'deliveries_file'],
             'level': 'INFO',
             'propagate': False,
         },
         'orders': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'orders_file'],
             'level': 'INFO',
             'propagate': False,
         },
         'tracking': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'tracking_file'],
             'level': 'INFO',
             'propagate': False,
         },
         'dashboard': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'dashboard_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'api': {
+            'handlers': ['console', 'api_file'],
             'level': 'INFO',
             'propagate': False,
         },
     },
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': ['console', 'root_file'],
         'level': 'INFO',
     },
 }
