@@ -44,6 +44,11 @@ const data = {
       icon: FileTextIcon,
     },
     {
+      title: "Commandes passées",
+      url: "/dashboard/orders",
+      icon: FileTextIcon,
+    },
+    {
       title: "Catégories",
       url: "/dashboard/categories",
       icon: FileCodeIcon,

@@ -29,13 +29,13 @@ import {
   PackageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Commande, Agent } from "@/lib/types";
+import type { Commande, AgentList } from "@/lib/types";
 
 interface CommandeAssignDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   commande: Commande | null;
-  agents: Agent[];
+  agents: AgentList[];
   onAssign: (commandeId: number, agentId: number) => Promise<void>;
 }
 
