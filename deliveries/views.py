@@ -36,37 +36,14 @@ class LivraisonCreateView(APIView):
     permission_classes = [IsAuthenticated, IsAgent]
     
     @swagger_auto_schema(
-        operation_description="""Créer une nouvelle livraison.
-        
-        **Deux modes possibles :**
-        
-        1. **Livraison pour commande** (RECOMMANDÉ - scénario principal) :
-           - `mode`: "commande"
-           - `commande_id` : ID de la commande à livrer
-           - L'agent doit être celui assigné à la commande
-           - Doit être à moins de 2m du point de livraison
-           - Met automatiquement à jour le statut de la commande
-           - **VALIDATION STRICTE:** La commande DOIT être celle assignée à l'agent
-        
-        2. **Livraison directe sans commande** (SECONDAIRE) :
-           - `mode`: "direct"
-           - `client_id` ou informations pour créer un nouveau client
-           - Pour les ventes directes sans commande préalable
-        """,
+        operation_description="""Créer une nouvelle livraison.""",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
-                'mode': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    enum=['commande', 'direct'],
-                    default='commande',
-                    description="Mode de livraison"
-                ),
                 'commande_id': openapi.Schema(
                     type=openapi.TYPE_INTEGER,
-                    description='ID de la commande à livrer (mode=commande)'
+                    description='ID de la commande à livrer'
                 ),
-                # ... autres propriétés identiques ...
             },
             required=['latitude', 'longitude'],
         ),
@@ -80,85 +57,66 @@ class LivraisonCreateView(APIView):
         """Créer une livraison"""
         logger.info(f"Demande de création de livraison par {request.user.email}")
         
-        # Déterminer le mode de livraison
-        mode = request.data.get('mode', 'commande')
+        serializer = LivraisonCreateForCommandeSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
         
-        if mode == 'commande':
-            # ===== LIVRAISON POUR COMMANDE ASSIGNÉE =====
-            serializer = LivraisonCreateForCommandeSerializer(
-                data=request.data,
-                context={'request': request}
-            )
-            serializer.is_valid(raise_exception=True)
-            
-            # VALIDATION SUPPLÉMENTAIRE CRITIQUE
-            commande_id = serializer.validated_data['_commande'].id
-            
-            # Récupérer l'agent
-            try:
-                agent = Agent.objects.get(email=request.user.email)
-            except Agent.DoesNotExist:
-                return Response(
-                    {'error': 'Agent non trouvé'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # VÉRIFIER QUE LA COMMANDE EST CELLE ASSIGNÉE À L'AGENT
-            commande_assignee = Commande.objects.filter(
-                agent=agent,
-                statut='en_cours'
-            ).first()
-            
-            if not commande_assignee:
-                logger.warning(
-                    f"Agent {agent.numero_identification} tente de livrer "
-                    f"sans commande en cours"
-                )
-                return Response(
-                    {
-                        'error': 'Aucune commande en cours',
-                        'detail': 'Vous devez avoir une commande en cours pour effectuer une livraison',
-                        'suggestion': 'Démarrez d\'abord une tournée avec une commande assignée'
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            if commande_assignee.id != commande_id:
-                logger.warning(
-                    f"Agent {agent.numero_identification} tente de livrer "
-                    f"commande #{commande_id} mais sa commande assignée est #{commande_assignee.id}"
-                )
-                return Response(
-                    {
-                        'error': 'Commande non autorisée',
-                        'detail': f'Vous ne pouvez livrer que votre commande assignée (#{commande_assignee.id})',
-                        'commande_assignee': commande_assignee.id,
-                        'commande_tentee': commande_id
-                    },
-                    status=status.HTTP_403_FORBIDDEN
-                )
-            
-            # Tout est OK, créer la livraison
-            livraison = serializer.save()
-            
+        # VALIDATION SUPPLÉMENTAIRE CRITIQUE
+        commande_id = serializer.validated_data['_commande'].id
+        
+        # Récupérer l'agent
+        try:
+            agent = Agent.objects.get(email=request.user.email)
+        except Agent.DoesNotExist:
             return Response(
-                LivraisonDetailSerializer(livraison).data,
-                status=status.HTTP_201_CREATED
+                {'error': 'Agent non trouvé'},
+                status=status.HTTP_404_NOT_FOUND
             )
         
-        else:
-            # ===== LIVRAISON DIRECTE SANS COMMANDE =====
-            serializer = LivraisonCreateSansCommandeSerializer(
-                data=request.data,
-                context={'request': request}
+        # VÉRIFIER QUE LA COMMANDE EST CELLE ASSIGNÉE À L'AGENT
+        commande_assignee = Commande.objects.filter(
+            agent=agent,
+            statut='en_cours'
+        ).first()
+        
+        if not commande_assignee:
+            logger.warning(
+                f"Agent {agent.numero_identification} tente de livrer "
+                f"sans commande en cours"
             )
-            serializer.is_valid(raise_exception=True)
-            livraison = serializer.save()
-            
             return Response(
-                LivraisonDetailSerializer(livraison).data,
-                status=status.HTTP_201_CREATED
+                {
+                    'error': 'Aucune commande en cours',
+                    'detail': 'Vous devez avoir une commande en cours pour effectuer une livraison',
+                    'suggestion': 'Démarrez d\'abord une tournée avec une commande assignée'
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
+        
+        if commande_assignee.id != commande_id:
+            logger.warning(
+                f"Agent {agent.numero_identification} tente de livrer "
+                f"commande #{commande_id} mais sa commande assignée est #{commande_assignee.id}"
+            )
+            return Response(
+                {
+                    'error': 'Commande non autorisée',
+                    'detail': f'Vous ne pouvez livrer que votre commande assignée (#{commande_assignee.id})',
+                    'commande_assignee': commande_assignee.id,
+                    'commande_tentee': commande_id
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Tout est OK, créer la livraison
+        livraison = serializer.save()
+        
+        return Response(
+            LivraisonDetailSerializer(livraison).data,
+            status=status.HTTP_201_CREATED
+        )
 
 
 class LivraisonListView(APIView):
@@ -172,7 +130,6 @@ class LivraisonListView(APIView):
             openapi.Parameter('agent_id', openapi.IN_QUERY, description="Filtrer par agent", type=openapi.TYPE_INTEGER),
             openapi.Parameter('commande_id', openapi.IN_QUERY, description="Filtrer par commande", type=openapi.TYPE_INTEGER),
             openapi.Parameter('search', openapi.IN_QUERY, description="Rechercher par nom client ou code", type=openapi.TYPE_STRING),
-            openapi.Parameter('mode', openapi.IN_QUERY, description="Filtrer par mode (commande/direct)", type=openapi.TYPE_STRING, enum=['commande', 'direct']),
         ],
         responses={200: LivraisonListSerializer(many=True)}
     )
@@ -229,15 +186,6 @@ class LivraisonListView(APIView):
         if commande_id:
             livraisons = livraisons.filter(commande_id=commande_id)
             logger.info(f"Filtre commande_id appliqué : {commande_id}")
-        
-        # Filtrer par mode
-        mode = request.query_params.get('mode', None)
-        if mode == 'commande':
-            livraisons = livraisons.filter(commande__isnull=False)
-            logger.info(f"Filtre mode appliqué : livraisons avec commande")
-        elif mode == 'direct':
-            livraisons = livraisons.filter(commande__isnull=True)
-            logger.info(f"Filtre mode appliqué : livraisons sans commande")
         
         # Recherche
         search = request.query_params.get('search', None)
