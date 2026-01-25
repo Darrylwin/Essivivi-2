@@ -36,10 +36,6 @@ export function SigninForm({
               <Button type="submit" className="w-full">
                 Se connecter
               </Button>
-
-              <div className="text-center text-sm">
-                <a href="/signin" className="underline underline-offset-4">Retour</a>
-              </div>
             </div>
           </form>
 
