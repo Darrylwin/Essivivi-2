@@ -7,16 +7,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.hashers import make_password, check_password
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 import logging
 
 from .models import Admin, Agent, Client, PendingUser
 from .serializers import (
-    AdminLoginSerializer, AdminSerializer, ClientRegisterSerializer, OTPRequestSerializer,
+    AdminLoginSerializer, AdminSerializer, ClientRegisterSerializer,
     OTPVerifySerializer, AgentProfileSerializer, ClientProfileSerializer,
-    ChangePasswordSerializer, ResendOTPSerializer, 
+    ResendOTPSerializer, 
     MobileLoginSerializer
 )
 from .utils import create_otp, send_otp_email, verify_otp
@@ -495,180 +494,6 @@ class ResendOTPView(APIView):
             # À SUPPRIMER EN PRODUCTION
             "otp": otp_code
         }, status=status.HTTP_200_OK)
-
-
-class ProfileView(APIView):
-    """Voir le profil de l'utilisateur connecté"""
-    permission_classes = [IsAuthenticated]
-    
-    @swagger_auto_schema(
-        responses={
-            200: "Profil récupéré avec succès"
-        }
-    )
-    def get(self, request):
-        logger.info(f"Demande de profil pour l'utilisateur : {request.user.email}")
-        
-        # Récupérer l'email de l'utilisateur connecté
-        email = request.user.email
-        
-        # Chercher dans agents puis clients
-        try:
-            agent = Agent.objects.get(email=email)
-            logger.info(f"Profil agent récupéré : {agent.numero_identification}")
-            return Response({
-                "user_type": "agent",
-                "profile": AgentProfileSerializer(agent).data
-            }, status=status.HTTP_200_OK)
-        except Agent.DoesNotExist:
-            pass
-        
-        try:
-            client = Client.objects.get(email=email)
-            logger.info(f"Profil client récupéré : {client.code_client}")
-            return Response({
-                "user_type": "client",
-                "profile": ClientProfileSerializer(client).data
-            }, status=status.HTTP_200_OK)
-        except Client.DoesNotExist:
-            pass
-        
-        # Si c'est un admin
-        logger.info(f"Profil admin récupéré : {request.user.email}")
-        return Response({
-            "user_type": "admin",
-            "profile": AdminSerializer(request.user).data
-        }, status=status.HTTP_200_OK)
-
-
-class ChangePasswordView(APIView):
-    """Changer le mot de passe"""
-    permission_classes = [IsAuthenticated]
-    
-    @swagger_auto_schema(
-        request_body=ChangePasswordSerializer,
-        responses={
-            200: "Mot de passe modifié avec succès",
-            400: "Ancien mot de passe incorrect"
-        }
-    )
-    def put(self, request):
-        logger.info(f"Tentative de changement de mot de passe pour : {request.user.email}")
-        
-        serializer = ChangePasswordSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        ancien_mot_de_passe = serializer.validated_data['ancien_mot_de_passe']
-        nouveau_mot_de_passe = serializer.validated_data['nouveau_mot_de_passe']
-        
-        # Vérifier l'ancien mot de passe
-        if not request.user.check_password(ancien_mot_de_passe):
-            logger.warning(f"Échec de changement de mot de passe : ancien mot de passe incorrect pour {request.user.email}")
-            return Response(
-                {"error": "Ancien mot de passe incorrect"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Mettre à jour le mot de passe
-        request.user.set_password(nouveau_mot_de_passe)
-        request.user.save()
-        
-        logger.info(f"Mot de passe modifié avec succès pour : {request.user.email}")
-        
-        return Response({
-            "message": "Mot de passe modifié avec succès"
-        }, status=status.HTTP_200_OK)
-
-class UpdatePhotoView(APIView):
-    """Mettre à jour la photo de profil"""
-    permission_classes = [IsAuthenticated]
-    
-    @swagger_auto_schema(
-        operation_description="Mettre à jour la photo de profil",
-        manual_parameters=[
-            openapi.Parameter(
-                'photo',
-                openapi.IN_FORM,
-                description="Fichier image à uploader",
-                type=openapi.TYPE_FILE,
-                required=True
-            )
-        ],
-        responses={
-            200: openapi.Response(
-                description="Photo mise à jour avec succès",
-                examples={
-                    "application/json": {
-                        "message": "Photo mise à jour avec succès",
-                        "photo_url": "https://api.example.com/media/agents/photos/profil.jpg"
-                    }
-                }
-            ),
-            400: "Format d'image invalide ou erreur d'upload"
-        },
-        consumes=['multipart/form-data']  # Important pour Swagger
-    )
-    def put(self, request):
-        logger.info(f"Tentative de mise à jour de photo pour : {request.user.email}")
-        
-        # Récupérer le fichier depuis request.FILES (pas request.data)
-        if 'photo' not in request.FILES:
-            logger.warning("Aucun fichier photo dans la requête")
-            return Response(
-                {"error": "Veuillez fournir une photo"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        photo = request.FILES['photo']
-        email = request.user.email
-        
-        # Valider le type de fichier
-        allowed_types = ['image/jpeg', 'image/png', 'image/jpg']
-        if photo.content_type not in allowed_types:
-            logger.warning(f"Type de fichier non autorisé : {photo.content_type}")
-            return Response(
-                {"error": "Format d'image non supporté. Utilisez JPEG ou PNG."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Limiter la taille (max 5MB)
-        if photo.size > 5 * 1024 * 1024:
-            logger.warning(f"Fichier trop volumineux : {photo.size} bytes")
-            return Response(
-                {"error": "L'image ne doit pas dépasser 5MB"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Chercher l'utilisateur et mettre à jour sa photo
-        try:
-            agent = Agent.objects.get(email=email)
-            agent.photo = photo
-            agent.save()
-            logger.info(f"Photo mise à jour avec succès pour l'agent : {agent.numero_identification}")
-            return Response({
-                "message": "Photo mise à jour avec succès",
-                "photo_url": request.build_absolute_uri(agent.photo.url) if agent.photo else None
-            }, status=status.HTTP_200_OK)
-        except Agent.DoesNotExist:
-            pass
-        
-        try:
-            client = Client.objects.get(email=email)
-            client.photo_point_vente = photo
-            client.save()
-            logger.info(f"Photo mise à jour avec succès pour le client : {client.code_client}")
-            return Response({
-                "message": "Photo mise à jour avec succès",
-                "photo_url": request.build_absolute_uri(client.photo_point_vente.url) if client.photo_point_vente else None
-            }, status=status.HTTP_200_OK)
-        except Client.DoesNotExist:
-            pass
-        
-        logger.error(f"Échec de mise à jour de photo pour : {email}")
-        return Response(
-            {"error": "Impossible de mettre à jour la photo"},
-            status=status.HTTP_400_BAD_REQUEST
-        )
 
 class AccountInfoView(APIView):
     """Récupérer les informations du compte de l'utilisateur connecté"""

@@ -11,7 +11,7 @@ import logging
 from authentication.models import Agent, Client, Tricycle
 from .serializers import (
     AgentCreateSerializer, AgentUpdateSerializer, AgentListSerializer,
-    AgentDetailSerializer, AgentChangePasswordSerializer,
+    AgentDetailSerializer,
     ClientCreateSerializer, ClientUpdateSerializer, ClientListSerializer,
     ClientDetailSerializer,
     TricycleSerializer
@@ -229,30 +229,6 @@ class AgentDetailView(APIView):
         return Response({
             'message': 'Agent supprimé avec succès'
         }, status=status.HTTP_200_OK)
-
-
-class AgentChangePasswordView(APIView):
-    """Change le mot de passe d'un agent (ADMIN)"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(
-        operation_description="Change le mot de passe d'un agent",
-        request_body=AgentChangePasswordSerializer,
-        responses={200: "Mot de passe modifié avec succès"}
-    )
-    def post(self, request, pk):
-        """Change le mot de passe"""
-        logger.info(f"Changement mot de passe agent ID {pk}")
-        agent = get_object_or_404(Agent, pk=pk)
-        
-        serializer = AgentChangePasswordSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(agent)
-        
-        return Response({
-            'message': 'Mot de passe modifié avec succès'
-        }, status=status.HTTP_200_OK)
-
 
 # ==================== CLIENTS ====================
 

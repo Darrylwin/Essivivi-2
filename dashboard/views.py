@@ -2,11 +2,10 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, Avg, Q, F
+from django.db.models import Sum, Count, Avg
 from django.utils import timezone
-from datetime import timedelta, datetime, time
+from datetime import timedelta
 from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
 import logging
 from decimal import Decimal
 
@@ -16,7 +15,7 @@ from deliveries.models import Livraison
 from orders.models import Commande
 from tracking.models import PositionAgent
 from .serializers import (
-    DashboardAdminSerializer, DashboardAgentSerializer, PerformanceAgentSerializer, KPISerializer
+    DashboardAdminSerializer, KPISerializer
 )
 from users.permissions import IsAdmin
 
@@ -100,173 +99,6 @@ class DashboardAdminView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class DashboardAgentView(APIView):
-    """Dashboard pour un agent"""
-    permission_classes = [IsAuthenticated]
-    
-    @swagger_auto_schema(responses={200: DashboardAgentSerializer()})
-    def get(self, request):
-        logger.info(f"Récupération du dashboard agent pour {request.user.email}")
-        
-        # Récupérer l'agent
-        try:
-            agent = Agent.objects.get(email=request.user.email)
-        except Agent.DoesNotExist:
-            return Response(
-                {"error": "Agent non trouvé"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        aujourdhui = timezone.now().date()
-        debut_semaine = aujourdhui - timedelta(days=aujourdhui.weekday())
-        debut_mois = aujourdhui.replace(day=1)
-        
-        # Statistiques du jour
-        livraisons_jour = Livraison.objects.filter(
-            agent=agent,
-            date_livraison=aujourdhui
-        )
-        stats_jour = livraisons_jour.aggregate(
-            total=Count('id'),
-            quantite=Sum('quantite_livree'),
-            montant=Sum('montant_percu')
-        )
-        
-        # Statistiques de la semaine
-        livraisons_semaine = Livraison.objects.filter(
-            agent=agent,
-            date_livraison__gte=debut_semaine
-        )
-        stats_semaine = livraisons_semaine.aggregate(
-            total=Count('id'),
-            quantite=Sum('quantite_livree'),
-            montant=Sum('montant_percu')
-        )
-        
-        # Statistiques du mois
-        livraisons_mois = Livraison.objects.filter(
-            agent=agent,
-            date_livraison__gte=debut_mois
-        )
-        stats_mois = livraisons_mois.aggregate(
-            total=Count('id'),
-            quantite=Sum('quantite_livree'),
-            montant=Sum('montant_percu')
-        )
-        
-        # Tournée en cours
-        tournee_en_cours = Tournee.objects.filter(
-            agent=agent,
-            heure_fin__isnull=True
-        ).first()
-        
-        duree_tournee = None
-        if tournee_en_cours:
-            delta = timezone.now() - tournee_en_cours.heure_debut
-            heures = int(delta.total_seconds() // 3600)
-            minutes = int((delta.total_seconds() % 3600) // 60)
-            duree_tournee = f"{heures}h {minutes}min"
-        
-        data = {
-            'agent_id': agent.id,
-            'agent_numero': agent.numero_identification,
-            'agent_nom': f"{agent.prenom} {agent.nom}",
-            'livraisons_aujourdhui': stats_jour['total'] or 0,
-            'quantite_aujourdhui': stats_jour['quantite'] or 0,
-            'montant_aujourdhui': stats_jour['montant'] or Decimal('0'),
-            'tournee_en_cours': tournee_en_cours is not None,
-            'duree_tournee_actuelle': duree_tournee,
-            'livraisons_semaine': stats_semaine['total'] or 0,
-            'quantite_semaine': stats_semaine['quantite'] or 0,
-            'montant_semaine': stats_semaine['montant'] or Decimal('0'),
-            'livraisons_mois': stats_mois['total'] or 0,
-            'quantite_mois': stats_mois['quantite'] or 0,
-            'montant_mois': stats_mois['montant'] or Decimal('0')
-        }
-        
-        serializer = DashboardAgentSerializer(data)
-        logger.info(f"Dashboard agent généré pour {agent.numero_identification}")
-        
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-# ==================== STATISTIQUES ====================
-class PerformanceAgentsView(APIView):
-    """Performance de tous les agents"""
-    permission_classes = [IsAuthenticated, IsAdmin]
-    
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter('date_debut', openapi.IN_QUERY, description="Date de début (YYYY-MM-DD)", type=openapi.TYPE_STRING),
-            openapi.Parameter('date_fin', openapi.IN_QUERY, description="Date de fin (YYYY-MM-DD)", type=openapi.TYPE_STRING),
-        ],
-        responses={200: PerformanceAgentSerializer(many=True)}
-    )
-    def get(self, request):
-        logger.info("Récupération de la performance des agents")
-        
-        # Récupérer les dates
-        date_debut_str = request.query_params.get('date_debut', None)
-        date_fin_str = request.query_params.get('date_fin', None)
-        
-        if date_debut_str:
-            date_debut = datetime.strptime(date_debut_str, '%Y-%m-%d').date()
-        else:
-            date_debut = timezone.now().date().replace(day=1)  # Début du mois
-        
-        if date_fin_str:
-            date_fin = datetime.strptime(date_fin_str, '%Y-%m-%d').date()
-        else:
-            date_fin = timezone.now().date()
-        
-        # Récupérer tous les agents
-        agents = Agent.objects.all()
-        
-        performances = []
-        
-        for agent in agents:
-            livraisons = Livraison.objects.filter(
-                agent=agent,
-                date_livraison__gte=date_debut,
-                date_livraison__lte=date_fin
-            )
-            
-            stats = livraisons.aggregate(
-                total_livraisons=Count('id'),
-                total_quantite=Sum('quantite_livree'),
-                total_montant=Sum('montant_percu')
-            )
-            
-            total_livraisons = stats['total_livraisons'] or 0
-            
-            if total_livraisons > 0:
-                nombre_jours = (date_fin - date_debut).days + 1
-                moyenne_livraisons_jour = total_livraisons / nombre_jours
-                montant_moyen = (stats['total_montant'] / total_livraisons)
-                
-                performances.append({
-                    'agent_id': agent.id,
-                    'agent_numero': agent.numero_identification,
-                    'agent_nom': f"{agent.prenom} {agent.nom}",
-                    'total_livraisons': total_livraisons,
-                    'total_quantite': stats['total_quantite'] or 0,
-                    'total_montant': stats['total_montant'] or Decimal('0'),
-                    'moyenne_livraisons_par_jour': round(moyenne_livraisons_jour, 2),
-                    'montant_moyen_par_livraison': montant_moyen,
-                    'classement': None  # Sera calculé après
-                })
-        
-        # Trier par total_livraisons et attribuer le classement
-        performances.sort(key=lambda x: x['total_livraisons'], reverse=True)
-        for i, perf in enumerate(performances, start=1):
-            perf['classement'] = i
-        
-        serializer = PerformanceAgentSerializer(performances, many=True)
-        logger.info(f"Performance calculée pour {len(performances)} agents")
-        
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-class KPIView(APIView):
     """Indicateurs clés de performance (KPI)"""
     permission_classes = [IsAuthenticated, IsAdmin]
     

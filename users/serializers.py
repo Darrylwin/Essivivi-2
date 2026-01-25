@@ -133,28 +133,6 @@ class AgentUpdateSerializer(serializers.ModelSerializer):
         logger.info(f"Agent mis à jour : {instance.numero_identification}")
         return instance
 
-
-class AgentChangePasswordSerializer(serializers.Serializer):
-    """Serializer pour changer le mot de passe d'un agent"""
-    nouveau_mot_de_passe = serializers.CharField(
-        write_only=True,
-        min_length=6,
-        required=True,
-        help_text="Nouveau mot de passe (6 caractères min)"
-    )
-    
-    def validate(self, data):
-        return data
-    
-    def save(self, agent):
-        """Mettre à jour le mot de passe"""
-        nouveau_mot_de_passe = self.validated_data['nouveau_mot_de_passe']
-        agent.mot_de_passe = make_password(nouveau_mot_de_passe)
-        agent.save()
-        logger.info(f"Mot de passe modifié pour agent : {agent.numero_identification}")
-        return agent
-
-
 class AgentListSerializer(serializers.ModelSerializer):
     """Serializer pour lister les agents"""
     tricycle_plaque = serializers.CharField(

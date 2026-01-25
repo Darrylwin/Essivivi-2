@@ -17,47 +17,6 @@ class DashboardAdminSerializer(serializers.Serializer):
     montant_hier = serializers.DecimalField(max_digits=12, decimal_places=2)
     evolution_montant = serializers.FloatField()  # Pourcentage
 
-
-class DashboardAgentSerializer(serializers.Serializer):
-    """Serializer pour le dashboard agent"""
-    agent_id = serializers.IntegerField()
-    agent_numero = serializers.CharField()
-    agent_nom = serializers.CharField()
-    
-    # Statistiques du jour
-    livraisons_aujourdhui = serializers.IntegerField()
-    quantite_aujourdhui = serializers.IntegerField()
-    montant_aujourdhui = serializers.DecimalField(max_digits=10, decimal_places=2)
-    tournee_en_cours = serializers.BooleanField()
-    duree_tournee_actuelle = serializers.CharField(allow_null=True)
-    
-    # Statistiques de la semaine
-    livraisons_semaine = serializers.IntegerField()
-    quantite_semaine = serializers.IntegerField()
-    montant_semaine = serializers.DecimalField(max_digits=10, decimal_places=2)
-    
-    # Statistiques du mois
-    livraisons_mois = serializers.IntegerField()
-    quantite_mois = serializers.IntegerField()
-    montant_mois = serializers.DecimalField(max_digits=10, decimal_places=2)
-
-
-class PerformanceAgentSerializer(serializers.Serializer):
-    """Serializer pour la performance d'un agent"""
-    agent_id = serializers.IntegerField()
-    agent_numero = serializers.CharField()
-    agent_nom = serializers.CharField()
-    
-    total_livraisons = serializers.IntegerField()
-    total_quantite = serializers.IntegerField()
-    total_montant = serializers.DecimalField(max_digits=10, decimal_places=2)
-    
-    moyenne_livraisons_par_jour = serializers.FloatField()
-    montant_moyen_par_livraison = serializers.DecimalField(max_digits=10, decimal_places=2)
-    
-    classement = serializers.IntegerField(allow_null=True)
-
-
 class KPISerializer(serializers.Serializer):
     """Serializer pour les KPI"""
     # Taux

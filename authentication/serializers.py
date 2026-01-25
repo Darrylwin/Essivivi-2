@@ -56,20 +56,6 @@ class ClientProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'code_client', 'date_inscription', 'created_at', 'updated_at', 'statut']
 
-
-class ChangePasswordSerializer(serializers.Serializer):
-    """Serializer pour changer le mot de passe"""
-    ancien_mot_de_passe = serializers.CharField(write_only=True)
-    nouveau_mot_de_passe = serializers.CharField(write_only=True, min_length=6)
-
-
-class UpdatePhotoSerializer(serializers.Serializer):
-    """Serializer pour mettre à jour la photo de profil"""
-    # Ce serializer n'est plus utilisé car on utilise request.FILES directement
-    # Mais on le garde pour la documentation
-    photo = serializers.ImageField()
-
-
 class MobileLoginSerializer(serializers.Serializer):
     """Serializer pour la connexion mobile (Agent OU Client)"""
     email = serializers.EmailField()

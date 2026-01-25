@@ -7,7 +7,6 @@ from .views import (
     # Agents
     AgentListCreateView,
     AgentDetailView,
-    AgentChangePasswordView,
     
     # Clients
     ClientListCreateView,
@@ -28,9 +27,6 @@ urlpatterns = [
     
     # GET: Détail agent | PUT/PATCH: Modifier agent | DELETE: Supprimer agent
     path('admin/agents/<int:pk>', AgentDetailView.as_view(), name='agent-detail'),
-    
-    # POST: Changer mot de passe agent
-    path('admin/agents/<int:pk>/change-password', AgentChangePasswordView.as_view(), name='agent-change-password'),
     
     # ==================== CLIENTS ====================
     # GET: Liste clients | POST: Créer client
