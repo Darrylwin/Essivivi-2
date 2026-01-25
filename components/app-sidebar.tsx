@@ -32,8 +32,8 @@ const data = {
   },
   navMain: [
     {
-      title: "Utilisateurs",
-      url: "/dashboard/users",
+      title: "Agents",
+      url: "/dashboard/agents",
       icon: UsersIcon,
     },
   ],

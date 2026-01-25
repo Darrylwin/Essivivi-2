@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * =====================================================
  * Hook - Gestion des Utilisateurs

@@ -1,11 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * =====================================================
  * API Client - Gestion des Utilisateurs (Admin)
  * =====================================================
  * Client pour les endpoints de gestion des agents et clients
  * 
- * @module lib/api/users.api
+ * @module lib.api
  * @version 1.0
  */
 
@@ -38,71 +37,61 @@ export class UsersApi {
   
   /**
    * Liste tous les tricycles
-   * GET /api/users/tricycles/
+   * GET /tricycles/
    */
   async getTricycles(): Promise<Tricycle[]> {
-    return this.client.get<Tricycle[]>("/api/users/tricycles/");
+    return this.client.get<Tricycle[]>("/tricycles/");
   }
 
   /**
    * Créer un tricycle
-   * POST /api/users/tricycles/
+   * POST /tricycles/
    */
   async createTricycle(plaque_immatriculation: string): Promise<Tricycle> {
-    return this.client.post<Tricycle>("/api/users/tricycles/", {
+    return this.client.post<Tricycle>("/tricycles/", {
       plaque_immatriculation,
     });
   }
 
   /**
    * Détails d'un tricycle
-   * GET /api/users/tricycles/{id}/
+   * GET /tricycles/{id}/
    */
   async getTricycle(id: number): Promise<Tricycle> {
-    return this.client.get<Tricycle>(`/api/users/tricycles/${id}/`);
+    return this.client.get<Tricycle>(`/tricycles/${id}/`);
   }
 
   /**
    * Modifier un tricycle
-   * PUT /api/users/tricycles/{id}/
+   * PUT /tricycles/{id}/
    */
   async updateTricycle(id: number, plaque_immatriculation: string): Promise<Tricycle> {
-    return this.client.put<Tricycle>(`/api/users/tricycles/${id}/`, {
+    return this.client.put<Tricycle>(`/tricycles/${id}/`, {
       plaque_immatriculation,
     });
   }
 
   /**
    * Supprimer un tricycle
-   * DELETE /api/users/tricycles/{id}/
+   * DELETE /tricycles/{id}/
    */
   async deleteTricycle(id: number): Promise<void> {
-    await this.client.delete(`/api/users/tricycles/${id}/`);
+    await this.client.delete(`/tricycles/${id}/`);
   }
 
   // ========== AGENTS ==========
   
   /**
    * Liste tous les agents avec filtres
-   * GET /api/users/admin/agents
+   * GET /admin/agents
    */
   async getAgents(params?: AgentQueryParams): Promise<AgentListResponse> {
-    let query: Record<string, string | number | boolean> | undefined = undefined;
-    if (params) {
-      query = Object.keys(params).reduce<Record<string, string | number | boolean>>((acc, key) => {
-        const value = (params as any)[key];
-        if (value !== undefined && value !== null) {
-          acc[key] = value as string | number | boolean;
-        }
-        return acc;
-      }, {});
-    }
-    return this.client.get<AgentListResponse>("/api/users/admin/agents", query);
+    return this.client.get<AgentListResponse>("/admin/agents", params);
   }
 
   /**
    * Créer un agent
-   * POST /api/users/admin/agents
+   * POST /admin/agents
    */
   async createAgent(data: AgentCreateRequest): Promise<AgentDetailResponse> {
     // Pour les uploads avec fichiers, utiliser FormData
@@ -130,7 +119,7 @@ export class UsersApi {
     }
     
     return this.client.post<AgentDetailResponse>(
-      "/api/users/admin/agents",
+      "/admin/agents",
       formData,
       {
         // Content-Type sera automatiquement défini par fetch pour FormData
@@ -141,15 +130,15 @@ export class UsersApi {
 
   /**
    * Détails d'un agent
-   * GET /api/users/admin/agents/{id}
+   * GET /admin/agents/{id}
    */
   async getAgent(id: number): Promise<AgentDetail> {
-    return this.client.get<AgentDetail>(`/api/users/admin/agents/${id}`);
+    return this.client.get<AgentDetail>(`/admin/agents/${id}`);
   }
 
   /**
    * Modifier un agent (PUT - modification complète)
-   * PUT /api/users/admin/agents/{id}
+   * PUT /admin/agents/{id}
    */
   async updateAgent(id: number, data: AgentUpdateRequest): Promise<AgentDetailResponse> {
     const formData = new FormData();
@@ -177,7 +166,7 @@ export class UsersApi {
     }
     
     return this.client.put<AgentDetailResponse>(
-      `/api/users/admin/agents/${id}`,
+      `/admin/agents/${id}`,
       formData,
       {
         "Accept": "application/json",
@@ -187,7 +176,7 @@ export class UsersApi {
 
   /**
    * Modifier partiellement un agent (PATCH)
-   * PATCH /api/users/admin/agents/{id}
+   * PATCH /admin/agents/{id}
    */
   async patchAgent(id: number, data: AgentUpdateRequest): Promise<AgentDetailResponse> {
     const formData = new FormData();
@@ -215,7 +204,7 @@ export class UsersApi {
     }
     
     return this.client.patch<AgentDetailResponse>(
-      `/api/users/admin/agents/${id}`,
+      `/admin/agents/${id}`,
       formData,
       {
         "Accept": "application/json",
@@ -225,19 +214,19 @@ export class UsersApi {
 
   /**
    * Supprimer un agent
-   * DELETE /api/users/admin/agents/{id}
+   * DELETE /admin/agents/{id}
    */
   async deleteAgent(id: number): Promise<SimpleMessageResponse> {
-    return this.client.delete<SimpleMessageResponse>(`/api/users/admin/agents/${id}`);
+    return this.client.delete<SimpleMessageResponse>(`/admin/agents/${id}`);
   }
 
   /**
    * Changer le mot de passe d'un agent
-   * POST /api/users/admin/agents/{id}/change-password
+   * POST /admin/agents/{id}/change-password
    */
   async changeAgentPassword(id: number, data: AgentChangePasswordRequest): Promise<SimpleMessageResponse> {
     return this.client.post<SimpleMessageResponse>(
-      `/api/users/admin/agents/${id}/change-password`,
+      `/admin/agents/${id}/change-password`,
       data
     );
   }
@@ -246,25 +235,15 @@ export class UsersApi {
   
   /**
    * Liste tous les clients avec filtres
-   * GET /api/users/admin/clients
+   * GET /admin/clients
    */
   async getClients(params?: ClientQueryParams): Promise<ClientListResponse> {
-    let query: Record<string, string | number | boolean> | undefined = undefined;
-    if (params) {
-      query = Object.keys(params).reduce<Record<string, string | number | boolean>>((acc, key) => {
-        const value = (params as any)[key];
-        if (value !== undefined && value !== null) {
-          acc[key] = value as string | number | boolean;
-        }
-        return acc;
-      }, {});
-    }
-    return this.client.get<ClientListResponse>("/api/users/admin/clients", query);
+    return this.client.get<ClientListResponse>("/admin/clients", params);
   }
 
   /**
    * Créer un client
-   * POST /api/users/admin/clients
+   * POST /admin/clients
    */
   async createClient(data: ClientCreateRequest): Promise<ClientDetailResponse> {
     const formData = new FormData();
@@ -292,7 +271,7 @@ export class UsersApi {
     }
     
     return this.client.post<ClientDetailResponse>(
-      "/api/users/admin/clients",
+      "/admin/clients",
       formData,
       {
         "Accept": "application/json",
@@ -302,15 +281,15 @@ export class UsersApi {
 
   /**
    * Détails d'un client
-   * GET /api/users/admin/clients/{id}
+   * GET /admin/clients/{id}
    */
   async getClient(id: number): Promise<ClientDetail> {
-    return this.client.get<ClientDetail>(`/api/users/admin/clients/${id}`);
+    return this.client.get<ClientDetail>(`/admin/clients/${id}`);
   }
 
   /**
    * Modifier un client (PUT - modification complète)
-   * PUT /api/users/admin/clients/{id}
+   * PUT /admin/clients/{id}
    */
   async updateClient(id: number, data: ClientUpdateRequest): Promise<ClientDetailResponse> {
     const formData = new FormData();
@@ -342,7 +321,7 @@ export class UsersApi {
     }
     
     return this.client.put<ClientDetailResponse>(
-      `/api/users/admin/clients/${id}`,
+      `/admin/clients/${id}`,
       formData,
       {
         "Accept": "application/json",
@@ -352,7 +331,7 @@ export class UsersApi {
 
   /**
    * Modifier partiellement un client (PATCH)
-   * PATCH /api/users/admin/clients/{id}
+   * PATCH /admin/clients/{id}
    */
   async patchClient(id: number, data: ClientUpdateRequest): Promise<ClientDetailResponse> {
     const formData = new FormData();
@@ -384,7 +363,7 @@ export class UsersApi {
     }
     
     return this.client.patch<ClientDetailResponse>(
-      `/api/users/admin/clients/${id}`,
+      `/admin/clients/${id}`,
       formData,
       {
         "Accept": "application/json",
@@ -394,10 +373,10 @@ export class UsersApi {
 
   /**
    * Supprimer un client
-   * DELETE /api/users/admin/clients/{id}
+   * DELETE /admin/clients/{id}
    */
   async deleteClient(id: number): Promise<SimpleMessageResponse> {
-    return this.client.delete<SimpleMessageResponse>(`/api/users/admin/clients/${id}`);
+    return this.client.delete<SimpleMessageResponse>(`/admin/clients/${id}`);
   }
 }
 
