@@ -14,3 +14,4 @@ export type { ApiResponse } from "./client";
 
 // Clients API par catégorie
 export { authApi, AuthApi } from "./auth.api";
+export { usersApi, UsersApi } from "./users.api";
