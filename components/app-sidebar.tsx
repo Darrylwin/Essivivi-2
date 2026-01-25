@@ -3,13 +3,10 @@
 import * as React from "react"
 import {
   CameraIcon,
-  ClipboardListIcon,
-  DatabaseIcon,
   FileCodeIcon,
-  FileIcon,
   FileTextIcon,
-  FolderIcon,
   UsersIcon,
+  TruckIcon,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -35,6 +32,11 @@ const data = {
       title: "Agents",
       url: "/dashboard/agents",
       icon: UsersIcon,
+    },
+    {
+      title: "Tricycles",
+      url: "/dashboard/tricycles",
+      icon: TruckIcon,
     },
   ],
   navClouds: [
@@ -99,7 +101,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <a href="#">
+              <a href="/dashboard/overview">
                 <span className="text-base font-semibold">Essivivi Admin</span>
               </a>
             </SidebarMenuButton>
