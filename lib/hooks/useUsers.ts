@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * =====================================================
  * Hook - Gestion des Utilisateurs
@@ -92,7 +93,7 @@ export function useUsers() {
       const tricycles = await usersApi.getTricycles();
       setState(prev => ({
         ...prev,
-        tricycles,
+        tricycles: Array.isArray(tricycles) ? tricycles : [], // Ajout de cette vérification
         tricyclesLoading: false,
       }));
       

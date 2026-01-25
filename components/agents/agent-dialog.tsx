@@ -43,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { CalendarIcon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label"; // Ajoutez cette importation
 
 const agentSchema = z.object({
   nom: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
@@ -335,7 +336,7 @@ export function AgentDialog({
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="none">Aucun tricycle</SelectItem>
-                      {tricycles.map((tricycle) => (
+                      {Array.isArray(tricycles) && tricycles.map((tricycle) => (
                         <SelectItem key={tricycle.id} value={tricycle.id.toString()}>
                           {tricycle.plaque_immatriculation}
                         </SelectItem>
@@ -352,7 +353,8 @@ export function AgentDialog({
                 <Separator />
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <FormLabel>Mot de passe</FormLabel>
+                    {/* Utilisez Label au lieu de FormLabel ici */}
+                    <Label htmlFor="mot-de-passe">Mot de passe</Label>
                     <Button
                       type="button"
                       variant="outline"
@@ -373,6 +375,7 @@ export function AgentDialog({
                             {...field}
                             type="text"
                             placeholder="Laisser vide pour générer automatiquement"
+                            id="mot-de-passe"
                           />
                         </FormControl>
                         <FormMessage />

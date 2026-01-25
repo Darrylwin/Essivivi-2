@@ -231,7 +231,7 @@ export default function AgentsPage() {
               <SelectContent>
                 <SelectItem value="all">Tous les tricycles</SelectItem>
                 <SelectItem value="none">Sans tricycle</SelectItem>
-                {tricycles.map((tricycle) => (
+                {Array.isArray(tricycles) && tricycles.map((tricycle) => (
                   <SelectItem key={tricycle.id} value={tricycle.id.toString()}>
                     {tricycle.plaque_immatriculation}
                   </SelectItem>
