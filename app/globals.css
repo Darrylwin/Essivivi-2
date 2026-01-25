@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import "leaflet/dist/leaflet.css";
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -134,4 +136,22 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+.leaflet-control-container .leaflet-control {
+  z-index: 0 !important;
+}
+
+.leaflet-pane {
+  z-index: 1 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 2 !important;
 }

@@ -200,3 +200,33 @@ export interface CommandeFilters {
 export interface NotificationFilters {
   lue?: boolean;
 }
+
+// ======== Ajouts ===============
+export interface CommandeStats {
+  total: number;
+  en_attente: number;
+  acceptee: number;
+  en_cours: number;
+  livree: number;
+  annulee: number;
+  montant_total: string;
+}
+
+export interface Agent {
+  id: number;
+  nom: string;
+  prenom: string;
+  numero_identification: string;
+  telephone: string;
+  statut: 'actif' | 'inactif';
+  email: string;
+}
+
+export interface Client {
+  id: number;
+  nom_point_vente: string;
+  nom_responsable: string;
+  telephone: string;
+  code_client: string;
+  email: string;
+}
