@@ -77,6 +77,26 @@ class CommandeListCreateView(APIView):
                 description="Rechercher par nom de client ou code",
                 type=openapi.TYPE_STRING
             ),
+            openapi.Parameter(
+                'lat',
+                openapi.IN_QUERY,
+                description="Latitude pour filtrer par proximité (optionnel avec lon)",
+                type=openapi.TYPE_NUMBER,
+                format='decimal'
+            ),
+            openapi.Parameter(
+                'lon',
+                openapi.IN_QUERY,
+                description="Longitude pour filtrer par proximité (optionnel avec lat)",
+                type=openapi.TYPE_NUMBER,
+                format='decimal'
+            ),
+            openapi.Parameter(
+                'distance_max',
+                openapi.IN_QUERY,
+                description="Distance maximale en mètres pour le filtrage par proximité (défaut: 5000)",
+                type=openapi.TYPE_NUMBER
+            ),
         ],
         responses={200: CommandeListSerializer(many=True)}
     )
@@ -130,6 +150,63 @@ class CommandeListCreateView(APIView):
                 Q(client__code_client__icontains=search)
             )
             logger.info(f"Recherche : {search}")
+        
+        # Filtrage par proximité géographique
+        lat = request.query_params.get('lat')
+        lon = request.query_params.get('lon')
+        if lat and lon:
+            try:
+                from math import radians, sin, cos, sqrt, atan2
+                
+                lat_float = float(lat)
+                lon_float = float(lon)
+                distance_max = float(request.query_params.get('distance_max', 5000))
+                
+                # Rayon de la Terre en mètres
+                R = 6371000
+                
+                # Convertir latitude en radians
+                lat_rad = radians(lat_float)
+                
+                # Filtre approximatif d'abord (carré)
+                deg_per_km = 0.009  # Environ 1km en degrés
+                max_distance_deg = (distance_max / 1000) * deg_per_km
+                
+                commandes = commandes.filter(
+                    latitude_livraison__range=(lat_float - max_distance_deg, lat_float + max_distance_deg),
+                    longitude_livraison__range=(lon_float - max_distance_deg, lon_float + max_distance_deg)
+                )
+                
+                # Calculer la distance exacte pour chaque commande
+                commandes_list = list(commandes)
+                filtered_commandes = []
+                
+                for commande in commandes_list:
+                    try:
+                        cmd_lat = radians(float(commande.latitude_livraison))
+                        cmd_lon = radians(float(commande.longitude_livraison))
+                        
+                        dlat = cmd_lat - lat_rad
+                        dlon = cmd_lon - radians(lon_float)
+                        
+                        a = sin(dlat/2)**2 + cos(lat_rad) * cos(cmd_lat) * sin(dlon/2)**2
+                        c = 2 * atan2(sqrt(a), sqrt(1-a))
+                        distance = R * c
+                        
+                        if distance <= distance_max:
+                            filtered_commandes.append(commande)
+                    except (TypeError, ValueError):
+                        continue
+                
+                from django.core.paginator import Paginator
+                # Recréer un queryset avec les IDs filtrés
+                commande_ids = [cmd.id for cmd in filtered_commandes]
+                commandes = Commande.objects.filter(id__in=commande_ids).order_by('-created_at')
+                
+                logger.info(f"Filtre proximité : {lat}, {lon} - {len(filtered_commandes)} commandes dans un rayon de {distance_max}m")
+                
+            except (ValueError, TypeError) as e:
+                logger.error(f"Erreur filtrage proximité : {e}")
         
         serializer = CommandeListSerializer(commandes, many=True)
         logger.info(f"{commandes.count()} commandes trouvées")
@@ -361,7 +438,8 @@ class CommandeAssignView(APIView):
             titre='Nouvelle commande assignée',
             message=(
                 f"Commande #{commande.id} vous a été assignée. "
-                f"Client : {commande.client.nom_point_vente}"
+                f"Client : {commande.client.nom_point_vente} - "
+                f"Localisation: {commande.latitude_livraison}, {commande.longitude_livraison}"
             )
         )
         
@@ -371,7 +449,7 @@ class CommandeAssignView(APIView):
             client=commande.client,
             commande=commande,
             titre='Commande acceptée',
-            message=f"Votre commande #{commande.id} a été acceptée et assignée"
+            message=f"Votre commande #{commande.id} a été acceptée et assignée à un agent"
         )
         
         if old_agent:
@@ -434,7 +512,7 @@ class CommandeStatusView(APIView):
                 client=commande.client,
                 commande=commande,
                 titre='Commande livrée',
-                message=f"Votre commande #{commande.id} a été livrée avec succès"
+                message=f"Votre commande #{commande.id} a été livrée avec succès à {commande.latitude_livraison}, {commande.longitude_livraison}"
             )
         
         # Notification si annulée

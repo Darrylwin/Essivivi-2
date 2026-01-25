@@ -6,14 +6,14 @@ from .models import Commande, Notification
 class CommandeAdmin(admin.ModelAdmin):
     list_display = [
         'id', 'client', 'agent', 'quantite_demandee',
-        'statut', 'created_at'
+        'statut', 'created_at', 'latitude_livraison', 'longitude_livraison'
     ]
     list_filter = ['statut', 'created_at']
     search_fields = [
         'client__code_client', 'client__nom_point_vente',
         'agent__numero_identification', 'agent__nom'
     ]
-    readonly_fields = ['created_at', 'updated_at', 'est_assignee']
+    readonly_fields = ['created_at', 'updated_at', 'est_assignee', 'montant_total', 'quantite_totale']
     
     fieldsets = (
         ('Acteurs', {
@@ -21,7 +21,8 @@ class CommandeAdmin(admin.ModelAdmin):
         }),
         ('Informations de la commande', {
             'fields': (
-                'quantite_demandee', 'adresse_livraison',
+                'quantite_demandee', 'montant_total', 'quantite_totale',
+                'latitude_livraison', 'longitude_livraison',
                 'statut'
             )
         }),

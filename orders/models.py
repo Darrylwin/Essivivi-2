@@ -36,7 +36,20 @@ class Commande(models.Model):
         blank=True,
         help_text='Optionnel - calculé depuis les lignes de commande'
     )
-    adresse_livraison = models.TextField(verbose_name='Adresse de livraison')
+    
+    # Coordonnées géographiques de livraison
+    latitude_livraison = models.DecimalField(
+        max_digits=10,
+        decimal_places=8,
+        verbose_name='Latitude du point de livraison',
+        help_text='Coordonnée GPS de la livraison (-90 à 90)'
+    )
+    longitude_livraison = models.DecimalField(
+        max_digits=11,
+        decimal_places=8,
+        verbose_name='Longitude du point de livraison',
+        help_text='Coordonnée GPS de la livraison (-180 à 180)'
+    )
     
     # Statut
     statut = models.CharField(
@@ -75,6 +88,27 @@ class Commande(models.Model):
         """Calcule la quantité totale commandée depuis les lignes"""
         total = sum(ligne.quantite for ligne in self.lignes.all())
         return total if total > 0 else (self.quantite_demandee or 0)
+    
+    def get_distance_to(self, other_lat, other_lon):
+        """Calcule la distance en mètres entre cette commande et un autre point GPS"""
+        from math import radians, sin, cos, sqrt, atan2
+        
+        # Rayon de la Terre en mètres
+        R = 6371000
+        
+        lat1 = radians(float(self.latitude_livraison))
+        lon1 = radians(float(self.longitude_livraison))
+        lat2 = radians(float(other_lat))
+        lon2 = radians(float(other_lon))
+        
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        
+        distance = R * c
+        return round(distance, 2)
 
 
 class LigneCommande(models.Model):
