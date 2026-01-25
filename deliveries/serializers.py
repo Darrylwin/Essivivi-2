@@ -152,30 +152,39 @@ class LivraisonCreateSerializer(serializers.Serializer):
     def create(self, validated_data):
         """Création de la livraison avec lignes"""
         request = self.context.get('request')
+        is_admin = self.context.get('is_admin', False)
         
         # ÉTAPE 1: Récupérer l'agent connecté
         try:
             agent = Agent.objects.get(email=request.user.email)
         except Agent.DoesNotExist:
+            # Si c'est un admin, on ne peut pas créer de livraison
+            # (il faudrait spécifier quel agent)
+            if is_admin:
+                raise serializers.ValidationError(
+                    "En tant qu'admin, vous devez spécifier un agent_id"
+                )
             raise serializers.ValidationError("Agent non trouvé")
         
-        # ÉTAPE 2: Vérifier que l'agent est en tournée
-        if agent.statut != 'en_tournee':
-            raise serializers.ValidationError(
-                "Vous devez être en tournée pour enregistrer une livraison"
-            )
+        # ÉTAPE 2: Vérifier que l'agent est en tournée (SAUF si admin)
+        if not is_admin:
+            if agent.statut != 'en_tournee':
+                raise serializers.ValidationError(
+                    "Vous devez être en tournée pour enregistrer une livraison"
+                )
         
-        # ÉTAPE 3: Récupérer la tournée en cours
-        tournee = Tournee.objects.filter(
-            agent=agent,
-            heure_fin__isnull=True
-        ).first()
-        
-        if not tournee:
-            raise serializers.ValidationError(
-                "Aucune tournée en cours trouvée. Veuillez démarrer une tournée."
-            )
-        
+        # ÉTAPE 3: Récupérer la tournée en cours (SAUF si admin)
+        tournee = None
+        if not is_admin:
+            tournee = Tournee.objects.filter(
+                agent=agent,
+                heure_fin__isnull=True
+            ).first()
+            
+            if not tournee:
+                raise serializers.ValidationError(
+                    "Aucune tournée en cours trouvée. Veuillez démarrer une tournée."
+                )        
         # ÉTAPE 4: Gérer le client (existant ou nouveau)
         client_id = validated_data.get('client_id')
         
