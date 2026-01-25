@@ -33,7 +33,7 @@ export class ProductsApi {
   
   /**
    * Liste toutes les catégories
-   * GET /api/products/categories
+   * GET /categories
    */
   async getCategories(params?: CategorieQueryParams): Promise<CategorieAvecProduitsResponse> {
     const queryParams: Record<string, string> = {};
@@ -46,60 +46,60 @@ export class ProductsApi {
       queryParams.avec_produits = params.avec_produits.toString();
     }
     
-    return this.client.get<CategorieAvecProduitsResponse>("/api/products/categories", queryParams);
+    return this.client.get<CategorieAvecProduitsResponse>("/categories", queryParams);
   }
 
   /**
    * Créer une catégorie
-   * POST /api/products/categories
+   * POST /categories
    */
   async createCategorie(data: CategorieCreateRequest): Promise<CategorieDetailResponse> {
-    return this.client.post<CategorieDetailResponse>("/api/products/categories", data);
+    return this.client.post<CategorieDetailResponse>("/categories", data);
   }
 
   /**
    * Détails d'une catégorie
-   * GET /api/products/categories/{id}
+   * GET /categories/{id}
    */
   async getCategorie(id: number): Promise<CategorieAvecProduits> {
-    return this.client.get<CategorieAvecProduits>(`/api/products/categories/${id}`);
+    return this.client.get<CategorieAvecProduits>(`/categories/${id}`);
   }
 
   /**
    * Modifier une catégorie (PUT - modification complète)
-   * PUT /api/products/categories/{id}
+   * PUT /categories/{id}
    */
   async updateCategorie(id: number, data: CategorieUpdateRequest): Promise<CategorieDetailResponse> {
     return this.client.put<CategorieDetailResponse>(
-      `/api/products/categories/${id}`,
+      `/categories/${id}`,
       data
     );
   }
 
   /**
    * Modifier partiellement une catégorie (PATCH)
-   * PATCH /api/products/categories/{id}
+   * PATCH /categories/{id}
    */
   async patchCategorie(id: number, data: CategorieUpdateRequest): Promise<CategorieDetailResponse> {
     return this.client.patch<CategorieDetailResponse>(
-      `/api/products/categories/${id}`,
+      `/categories/${id}`,
       data
     );
   }
 
   /**
    * Supprimer une catégorie
-   * DELETE /api/products/categories/{id}
+   * DELETE /categories/{id}
    */
   async deleteCategorie(id: number): Promise<SimpleMessageResponse> {
-    return this.client.delete<SimpleMessageResponse>(`/api/products/categories/${id}`);
+    return this.client.delete<SimpleMessageResponse>(`/categories/${id}`);
   }
 
   // ========== PRODUITS ==========
   
   /**
    * Liste tous les produits
-   * GET /api/products/produits
+   * GET /produits
    */
   async getProduits(params?: ProduitQueryParams): Promise<ProduitListResponse> {
     const queryParams: Record<string, string> = {};
@@ -116,12 +116,12 @@ export class ProductsApi {
       queryParams.search = params.search;
     }
     
-    return this.client.get<ProduitListResponse>("/api/products/produits", queryParams);
+    return this.client.get<ProduitListResponse>("/produits", queryParams);
   }
 
   /**
    * Créer un produit
-   * POST /api/products/produits
+   * POST /produits
    */
   async createProduit(data: ProduitCreateRequest): Promise<ProduitDetailResponse> {
     // Pour les uploads avec fichiers, utiliser FormData
@@ -148,7 +148,7 @@ export class ProductsApi {
     }
     
     return this.client.post<ProduitDetailResponse>(
-      "/api/products/produits",
+      "/produits",
       formData,
       {
         "Accept": "application/json",
@@ -158,15 +158,15 @@ export class ProductsApi {
 
   /**
    * Détails d'un produit
-   * GET /api/products/produits/{id}
+   * GET /produits/{id}
    */
   async getProduit(id: number): Promise<ProduitDetail> {
-    return this.client.get<ProduitDetail>(`/api/products/produits/${id}`);
+    return this.client.get<ProduitDetail>(`/produits/${id}`);
   }
 
   /**
    * Modifier un produit (PUT - modification complète)
-   * PUT /api/products/produits/{id}
+   * PUT /produits/{id}
    */
   async updateProduit(id: number, data: ProduitUpdateRequest): Promise<ProduitDetailResponse> {
     const formData = new FormData();
@@ -210,7 +210,7 @@ export class ProductsApi {
     }
     
     return this.client.put<ProduitDetailResponse>(
-      `/api/products/produits/${id}`,
+      `/produits/${id}`,
       formData,
       {
         "Accept": "application/json",
@@ -220,7 +220,7 @@ export class ProductsApi {
 
   /**
    * Modifier partiellement un produit (PATCH)
-   * PATCH /api/products/produits/{id}
+   * PATCH /produits/{id}
    */
   async patchProduit(id: number, data: ProduitUpdateRequest): Promise<ProduitDetailResponse> {
     const formData = new FormData();
@@ -264,7 +264,7 @@ export class ProductsApi {
     }
     
     return this.client.patch<ProduitDetailResponse>(
-      `/api/products/produits/${id}`,
+      `/produits/${id}`,
       formData,
       {
         "Accept": "application/json",
@@ -274,10 +274,10 @@ export class ProductsApi {
 
   /**
    * Supprimer un produit
-   * DELETE /api/products/produits/{id}
+   * DELETE /produits/{id}
    */
   async deleteProduit(id: number): Promise<SimpleMessageResponse> {
-    return this.client.delete<SimpleMessageResponse>(`/api/products/produits/${id}`);
+    return this.client.delete<SimpleMessageResponse>(`/produits/${id}`);
   }
 }
 

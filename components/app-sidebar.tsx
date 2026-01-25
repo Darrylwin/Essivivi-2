@@ -38,6 +38,16 @@ const data = {
       url: "/dashboard/tricycles",
       icon: TruckIcon,
     },
+    {
+      title: "Produits",
+      url: "/dashboard/products",
+      icon: FileTextIcon,
+    },
+    {
+      title: "Catégories",
+      url: "/dashboard/categories",
+      icon: FileCodeIcon,
+    },
   ],
   navClouds: [
     {
