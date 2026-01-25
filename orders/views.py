@@ -15,27 +15,146 @@ from .serializers import (
     CommandeAssignSerializer, CommandeStatusSerializer, CommandeUpdateSerializer,
     NotificationSerializer
 )
-from .permissions import IsClient, IsAgent, IsClientOrAdmin
 from users.permissions import IsAdmin
 
 logger = logging.getLogger('orders')
 
 
+def get_user_type(user):
+    """Détermine le type d'utilisateur et retourne (type, instance)"""
+    if hasattr(user, 'is_staff') and user.is_staff:
+        return ('admin', None)
+    
+    try:
+        client = Client.objects.get(email=user.email)
+        return ('client', client)
+    except Client.DoesNotExist:
+        pass
+    
+    try:
+        agent = Agent.objects.get(email=user.email)
+        return ('agent', agent)
+    except Agent.DoesNotExist:
+        pass
+    
+    return (None, None)
+
+
 # ==================== COMMANDES ====================
 
-class CommandeCreateView(APIView):
-    """Créer une commande (Client uniquement)"""
-    permission_classes = [IsAuthenticated, IsClient]
+class CommandeListCreateView(APIView):
+    """
+    GET: Liste les commandes (filtrées selon l'utilisateur)
+    POST: Crée une commande (Client uniquement)
+    """
+    permission_classes = [IsAuthenticated]
     
     @swagger_auto_schema(
+        operation_description="Liste les commandes accessibles à l'utilisateur",
+        manual_parameters=[
+            openapi.Parameter(
+                'statut',
+                openapi.IN_QUERY,
+                description="Filtrer par statut",
+                type=openapi.TYPE_STRING,
+                enum=['en_attente', 'acceptee', 'en_cours', 'livree', 'annulee']
+            ),
+            openapi.Parameter(
+                'agent_id',
+                openapi.IN_QUERY,
+                description="Filtrer par agent (Admin uniquement)",
+                type=openapi.TYPE_INTEGER
+            ),
+            openapi.Parameter(
+                'client_id',
+                openapi.IN_QUERY,
+                description="Filtrer par client (Admin uniquement)",
+                type=openapi.TYPE_INTEGER
+            ),
+            openapi.Parameter(
+                'search',
+                openapi.IN_QUERY,
+                description="Rechercher par nom de client ou code",
+                type=openapi.TYPE_STRING
+            ),
+        ],
+        responses={200: CommandeListSerializer(many=True)}
+    )
+    def get(self, request):
+        """Liste les commandes"""
+        logger.info("Récupération de la liste des commandes")
+        
+        user_type, user_instance = get_user_type(request.user)
+        
+        # Filtrer les commandes selon le type d'utilisateur
+        if user_type == 'admin':
+            commandes = Commande.objects.all()
+            logger.info("Admin : accès à toutes les commandes")
+        elif user_type == 'client':
+            commandes = Commande.objects.filter(client=user_instance)
+            logger.info(f"Client {user_instance.code_client} : ses commandes")
+        elif user_type == 'agent':
+            commandes = Commande.objects.filter(agent=user_instance)
+            logger.info(f"Agent {user_instance.numero_identification} : ses commandes")
+        else:
+            return Response(
+                {'error': 'Utilisateur non autorisé'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        commandes = commandes.select_related('client', 'agent').order_by('-created_at')
+        
+        # Filtres
+        statut = request.query_params.get('statut')
+        if statut:
+            commandes = commandes.filter(statut=statut)
+            logger.info(f"Filtre statut : {statut}")
+        
+        # Filtres admin uniquement
+        if user_type == 'admin':
+            agent_id = request.query_params.get('agent_id')
+            if agent_id:
+                commandes = commandes.filter(agent_id=agent_id)
+                logger.info(f"Filtre agent_id : {agent_id}")
+            
+            client_id = request.query_params.get('client_id')
+            if client_id:
+                commandes = commandes.filter(client_id=client_id)
+                logger.info(f"Filtre client_id : {client_id}")
+        
+        # Recherche
+        search = request.query_params.get('search')
+        if search:
+            commandes = commandes.filter(
+                Q(client__nom_point_vente__icontains=search) |
+                Q(client__code_client__icontains=search)
+            )
+            logger.info(f"Recherche : {search}")
+        
+        serializer = CommandeListSerializer(commandes, many=True)
+        logger.info(f"{commandes.count()} commandes trouvées")
+        
+        return Response({
+            'count': commandes.count(),
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
+    
+    @swagger_auto_schema(
+        operation_description="Crée une nouvelle commande (Client uniquement)",
         request_body=CommandeCreateSerializer,
-        responses={
-            201: CommandeDetailSerializer(),
-            400: "Validation échouée"
-        }
+        responses={201: CommandeDetailSerializer()}
     )
     def post(self, request):
-        logger.info(f"Demande de création de commande par {request.user.email}")
+        """Crée une commande (Client uniquement)"""
+        user_type, user_instance = get_user_type(request.user)
+        
+        if user_type != 'client':
+            return Response(
+                {'error': 'Seuls les clients peuvent créer des commandes'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        logger.info(f"Création commande par client {user_instance.code_client}")
         
         serializer = CommandeCreateSerializer(
             data=request.data,
@@ -44,165 +163,130 @@ class CommandeCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         commande = serializer.save()
         
-        return Response(
-            CommandeDetailSerializer(commande).data,
-            status=status.HTTP_201_CREATED
-        )
-
-
-class CommandeListView(APIView):
-    """Lister les commandes"""
-    permission_classes = [IsAuthenticated]
-    
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter('statut', openapi.IN_QUERY, description="Filtrer par statut", type=openapi.TYPE_STRING),
-            openapi.Parameter('agent_id', openapi.IN_QUERY, description="Filtrer par agent (admin)", type=openapi.TYPE_INTEGER),
-            openapi.Parameter('client_id', openapi.IN_QUERY, description="Filtrer par client (admin)", type=openapi.TYPE_INTEGER),
-            openapi.Parameter('search', openapi.IN_QUERY, description="Rechercher par nom client", type=openapi.TYPE_STRING),
-        ],
-        responses={200: CommandeListSerializer(many=True)}
-    )
-    def get(self, request):
-        logger.info("Récupération de la liste des commandes")
-        
-        # Déterminer le type d'utilisateur
-        is_admin = hasattr(request.user, 'is_staff') and request.user.is_staff
-        
-        if is_admin:
-            # Admin voit toutes les commandes
-            commandes = Commande.objects.all()
-            logger.info("Accès admin : toutes les commandes")
-        else:
-            # Vérifier si c'est un client ou un agent
-            try:
-                client = Client.objects.get(email=request.user.email)
-                commandes = Commande.objects.filter(client=client)
-                logger.info(f"Accès client : commandes de {client.code_client}")
-            except Client.DoesNotExist:
-                try:
-                    agent = Agent.objects.get(email=request.user.email)
-                    commandes = Commande.objects.filter(agent=agent)
-                    logger.info(f"Accès agent : commandes de {agent.numero_identification}")
-                except Agent.DoesNotExist:
-                    return Response(
-                        {"error": "Utilisateur non autorisé"},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-        
-        commandes = commandes.order_by('-created_at')
-        
-        # Filtrer par statut
-        statut = request.query_params.get('statut', None)
-        if statut:
-            commandes = commandes.filter(statut=statut)
-            logger.info(f"Filtre statut appliqué : {statut}")
-        
-        # Filtrer par agent (admin uniquement)
-        agent_id = request.query_params.get('agent_id', None)
-        if agent_id and is_admin:
-            commandes = commandes.filter(agent_id=agent_id)
-            logger.info(f"Filtre agent_id appliqué : {agent_id}")
-        
-        # Filtrer par client (admin uniquement)
-        client_id = request.query_params.get('client_id', None)
-        if client_id and is_admin:
-            commandes = commandes.filter(client_id=client_id)
-            logger.info(f"Filtre client_id appliqué : {client_id}")
-        
-        # Recherche
-        search = request.query_params.get('search', None)
-        if search:
-            commandes = commandes.filter(
-                Q(client__nom_point_vente__icontains=search) |
-                Q(client__code_client__icontains=search)
-            )
-            logger.info(f"Recherche appliquée : {search}")
-        
-        serializer = CommandeListSerializer(commandes, many=True)
-        logger.info(f"{commandes.count()} commandes récupérées")
-        
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({
+            'message': 'Commande créée avec succès',
+            'commande': CommandeDetailSerializer(commande).data
+        }, status=status.HTTP_201_CREATED)
 
 
 class CommandeDetailView(APIView):
-    """Récupérer, modifier ou supprimer une commande"""
+    """
+    GET: Récupère une commande
+    PUT/PATCH: Modifie une commande (Client si en_attente, Admin)
+    DELETE: Supprime une commande (Admin uniquement)
+    """
     permission_classes = [IsAuthenticated]
     
-    @swagger_auto_schema(responses={200: CommandeDetailSerializer()})
+    def _check_access(self, commande, user_type, user_instance):
+        """Vérifie que l'utilisateur peut accéder à cette commande"""
+        if user_type == 'admin':
+            return True
+        elif user_type == 'client':
+            return commande.client == user_instance
+        elif user_type == 'agent':
+            return commande.agent == user_instance
+        return False
+    
+    @swagger_auto_schema(
+        operation_description="Récupère les détails d'une commande",
+        responses={200: CommandeDetailSerializer()}
+    )
     def get(self, request, pk):
-        logger.info(f"Récupération de la commande ID {pk}")
-        commande = get_object_or_404(Commande, pk=pk)
+        """Récupère une commande"""
+        logger.info(f"Récupération commande #{pk}")
+        commande = get_object_or_404(
+            Commande.objects.select_related('client', 'agent'),
+            pk=pk
+        )
         
-        # Vérifier les permissions
-        is_admin = hasattr(request.user, 'is_staff') and request.user.is_staff
+        user_type, user_instance = get_user_type(request.user)
         
-        if not is_admin:
-            # Client ne peut voir que ses commandes
-            try:
-                client = Client.objects.get(email=request.user.email)
-                if commande.client != client:
-                    logger.warning(
-                        f"Client {client.code_client} tente d'accéder "
-                        f"à une commande d'un autre client"
-                    )
-                    return Response(
-                        {"error": "Vous ne pouvez consulter que vos propres commandes"},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-            except Client.DoesNotExist:
-                # Agent ne peut voir que ses commandes assignées
-                try:
-                    agent = Agent.objects.get(email=request.user.email)
-                    if commande.agent != agent:
-                        logger.warning(
-                            f"Agent {agent.numero_identification} tente d'accéder "
-                            f"à une commande d'un autre agent"
-                        )
-                        return Response(
-                            {"error": "Vous ne pouvez consulter que vos commandes assignées"},
-                            status=status.HTTP_403_FORBIDDEN
-                        )
-                except Agent.DoesNotExist:
-                    return Response(
-                        {"error": "Utilisateur non autorisé"},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
+        if not self._check_access(commande, user_type, user_instance):
+            return Response(
+                {'error': 'Vous n\'avez pas accès à cette commande'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         serializer = CommandeDetailSerializer(commande)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
+        operation_description="Modifie une commande (tous les champs requis)",
         request_body=CommandeUpdateSerializer,
         responses={200: CommandeDetailSerializer()}
     )
     def put(self, request, pk):
-        """Modifier une commande (Admin ou Client propriétaire)"""
-        logger.info(f"Mise à jour de la commande ID {pk}")
+        """Modifie une commande (PUT = modification complète)"""
+        logger.info(f"Modification complète commande #{pk}")
         commande = get_object_or_404(Commande, pk=pk)
         
-        # Vérifier les permissions
-        is_admin = hasattr(request.user, 'is_staff') and request.user.is_staff
+        user_type, user_instance = get_user_type(request.user)
         
-        if not is_admin:
-            try:
-                client = Client.objects.get(email=request.user.email)
-                if commande.client != client:
-                    return Response(
-                        {"error": "Vous ne pouvez modifier que vos propres commandes"},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-                # Client ne peut modifier que si statut = en_attente
-                if commande.statut != 'en_attente':
-                    return Response(
-                        {"error": "Vous ne pouvez modifier que les commandes en attente"},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-            except Client.DoesNotExist:
+        # Vérifier les permissions
+        if user_type == 'admin':
+            # Admin peut toujours modifier
+            pass
+        elif user_type == 'client':
+            if commande.client != user_instance:
                 return Response(
-                    {"error": "Seuls les clients et admins peuvent modifier une commande"},
+                    {'error': 'Vous ne pouvez modifier que vos commandes'},
                     status=status.HTTP_403_FORBIDDEN
                 )
+            if commande.statut != 'en_attente':
+                return Response(
+                    {'error': 'Vous ne pouvez modifier que les commandes en attente'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        else:
+            return Response(
+                {'error': 'Seuls les clients et admins peuvent modifier une commande'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = CommandeUpdateSerializer(
+            commande,
+            data=request.data,
+            partial=False
+        )
+        serializer.is_valid(raise_exception=True)
+        commande = serializer.save()
+        
+        return Response({
+            'message': 'Commande mise à jour avec succès',
+            'commande': CommandeDetailSerializer(commande).data
+        }, status=status.HTTP_200_OK)
+    
+    @swagger_auto_schema(
+        operation_description="Modifie partiellement une commande",
+        request_body=CommandeUpdateSerializer,
+        responses={200: CommandeDetailSerializer()}
+    )
+    def patch(self, request, pk):
+        """Modifie partiellement une commande (PATCH = modification partielle)"""
+        logger.info(f"Modification partielle commande #{pk}")
+        commande = get_object_or_404(Commande, pk=pk)
+        
+        user_type, user_instance = get_user_type(request.user)
+        
+        # Mêmes permissions que PUT
+        if user_type == 'admin':
+            pass
+        elif user_type == 'client':
+            if commande.client != user_instance:
+                return Response(
+                    {'error': 'Vous ne pouvez modifier que vos commandes'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            if commande.statut != 'en_attente':
+                return Response(
+                    {'error': 'Vous ne pouvez modifier que les commandes en attente'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        else:
+            return Response(
+                {'error': 'Seuls les clients et admins peuvent modifier une commande'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         serializer = CommandeUpdateSerializer(
             commande,
@@ -212,64 +296,63 @@ class CommandeDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         commande = serializer.save()
         
-        logger.info(f"Commande mise à jour : #{commande.id}")
-        
-        return Response(
-            CommandeDetailSerializer(commande).data,
-            status=status.HTTP_200_OK
-        )
+        return Response({
+            'message': 'Commande mise à jour avec succès',
+            'commande': CommandeDetailSerializer(commande).data
+        }, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
-        responses={204: "Commande supprimée avec succès"}
+        operation_description="Supprime une commande (Admin uniquement)",
+        responses={200: "Commande supprimée"}
     )
     def delete(self, request, pk):
-        """Supprimer une commande (Admin uniquement)"""
-        if not (hasattr(request.user, 'is_staff') and request.user.is_staff):
-            logger.warning(f"Tentative de suppression par non-admin : {request.user.email}")
+        """Supprime une commande (Admin uniquement)"""
+        user_type, _ = get_user_type(request.user)
+        
+        if user_type != 'admin':
             return Response(
-                {"error": "Seuls les administrateurs peuvent supprimer des commandes"},
+                {'error': 'Seuls les admins peuvent supprimer des commandes'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        logger.info(f"Suppression de la commande ID {pk}")
+        logger.info(f"Suppression commande #{pk}")
         commande = get_object_or_404(Commande, pk=pk)
         
-        commande_info = f"#{commande.id} - Client {commande.client.code_client}"
+        info = f"#{commande.id} - Client {commande.client.code_client}"
         commande.delete()
         
-        logger.info(f"Commande supprimée : {commande_info}")
+        logger.info(f"Commande supprimée : {info}")
         
-        return Response(
-            {"message": "Commande supprimée avec succès"},
-            status=status.HTTP_204_NO_CONTENT
-        )
+        return Response({
+            'message': 'Commande supprimée avec succès'
+        }, status=status.HTTP_200_OK)
 
 
 class CommandeAssignView(APIView):
-    """Assigner une commande à un agent (Admin uniquement)"""
+    """Assigne une commande à un agent (Admin uniquement)"""
     permission_classes = [IsAuthenticated, IsAdmin]
     
     @swagger_auto_schema(
+        operation_description="Assigne une commande à un agent",
         request_body=CommandeAssignSerializer,
         responses={200: CommandeDetailSerializer()}
     )
     def post(self, request, pk):
-        logger.info(f"Assignation de la commande ID {pk}")
+        """Assigne un agent à la commande"""
+        logger.info(f"Assignation commande #{pk}")
         commande = get_object_or_404(Commande, pk=pk)
         
         serializer = CommandeAssignSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        agent_id = serializer.validated_data['agent_id']
-        agent = Agent.objects.get(id=agent_id)
+        agent = Agent.objects.get(id=serializer.validated_data['agent_id'])
         
-        # Assigner l'agent
         old_agent = commande.agent
         commande.agent = agent
         commande.statut = 'acceptee'
         commande.save()
         
-        # Créer une notification pour l'agent
+        # Notification pour l'agent
         Notification.objects.create(
             type='livraison_assignee',
             agent=agent,
@@ -277,20 +360,18 @@ class CommandeAssignView(APIView):
             commande=commande,
             titre='Nouvelle commande assignée',
             message=(
-                f"Une commande de {commande.quantite_demandee} unités vous a été assignée. "
-                f"Client : {commande.client.nom_point_vente} ({commande.client.code_client})"
+                f"Commande #{commande.id} vous a été assignée. "
+                f"Client : {commande.client.nom_point_vente}"
             )
         )
         
-        # Créer une notification pour le client
+        # Notification pour le client
         Notification.objects.create(
             type='livraison_assignee',
             client=commande.client,
             commande=commande,
             titre='Commande acceptée',
-            message=(
-                f"Votre commande #{commande.id} a été acceptée et assignée à un agent. "
-            )
+            message=f"Votre commande #{commande.id} a été acceptée et assignée"
         )
         
         if old_agent:
@@ -299,47 +380,46 @@ class CommandeAssignView(APIView):
                 f"{old_agent.numero_identification} → {agent.numero_identification}"
             )
         else:
-            logger.info(
-                f"Commande #{commande.id} assignée à {agent.numero_identification}"
-            )
+            logger.info(f"Commande #{commande.id} assignée à {agent.numero_identification}")
         
-        return Response(
-            CommandeDetailSerializer(commande).data,
-            status=status.HTTP_200_OK
-        )
+        return Response({
+            'message': 'Commande assignée avec succès',
+            'commande': CommandeDetailSerializer(commande).data
+        }, status=status.HTTP_200_OK)
 
 
 class CommandeStatusView(APIView):
-    """Changer le statut d'une commande (Admin ou Agent assigné)"""
+    """Change le statut d'une commande (Admin ou Agent assigné)"""
     permission_classes = [IsAuthenticated]
     
     @swagger_auto_schema(
+        operation_description="Change le statut d'une commande",
         request_body=CommandeStatusSerializer,
         responses={200: CommandeDetailSerializer()}
     )
     def patch(self, request, pk):
-        logger.info(f"Changement de statut pour la commande ID {pk}")
+        """Change le statut"""
+        logger.info(f"Changement statut commande #{pk}")
         commande = get_object_or_404(Commande, pk=pk)
         
-        # Vérifier les permissions
-        is_admin = hasattr(request.user, 'is_staff') and request.user.is_staff
+        user_type, user_instance = get_user_type(request.user)
         
-        if not is_admin:
-            # Vérifier que c'est l'agent assigné
-            try:
-                agent = Agent.objects.get(email=request.user.email)
-                if commande.agent != agent:
-                    return Response(
-                        {"error": "Seul l'agent assigné peut changer le statut"},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-            except Agent.DoesNotExist:
+        # Vérifier permissions
+        if user_type == 'admin':
+            pass
+        elif user_type == 'agent':
+            if commande.agent != user_instance:
                 return Response(
-                    {"error": "Seuls les agents et admins peuvent changer le statut"},
+                    {'error': 'Seul l\'agent assigné peut changer le statut'},
                     status=status.HTTP_403_FORBIDDEN
                 )
+        else:
+            return Response(
+                {'error': 'Seuls les agents et admins peuvent changer le statut'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
-        serializer = CommandeStatusSerializer(data=request.data)
+        serializer = CommandeStatusSerializer(data=request.data, instance=commande)
         serializer.is_valid(raise_exception=True)
         
         old_statut = commande.statut
@@ -347,65 +427,73 @@ class CommandeStatusView(APIView):
         commande.statut = new_statut
         commande.save()
         
-        # Créer une notification si la commande est livrée
+        # Notification si livrée
         if new_statut == 'livree':
             Notification.objects.create(
                 type='livraison_terminee',
                 client=commande.client,
                 commande=commande,
                 titre='Commande livrée',
-                message=(
-                    f"Votre commande #{commande.id} a été livrée avec succès."
-                )
+                message=f"Votre commande #{commande.id} a été livrée avec succès"
             )
         
-        logger.info(
-            f"Statut de la commande #{commande.id} changé : {old_statut} → {new_statut}"
-        )
+        # Notification si annulée
+        if new_statut == 'annulee':
+            Notification.objects.create(
+                type='commande_annulee',
+                client=commande.client,
+                commande=commande,
+                titre='Commande annulée',
+                message=f"Votre commande #{commande.id} a été annulée"
+            )
         
-        return Response(
-            CommandeDetailSerializer(commande).data,
-            status=status.HTTP_200_OK
-        )
+        logger.info(f"Statut commande #{commande.id} : {old_statut} → {new_statut}")
+        
+        return Response({
+            'message': f'Statut changé : {old_statut} → {new_statut}',
+            'commande': CommandeDetailSerializer(commande).data
+        }, status=status.HTTP_200_OK)
 
 
 # ==================== NOTIFICATIONS ====================
 
 class NotificationListView(APIView):
-    """Lister les notifications de l'utilisateur connecté"""
+    """Liste les notifications de l'utilisateur"""
     permission_classes = [IsAuthenticated]
     
     @swagger_auto_schema(
+        operation_description="Liste les notifications de l'utilisateur connecté",
         manual_parameters=[
-            openapi.Parameter('lue', openapi.IN_QUERY, description="Filtrer par statut de lecture (true/false)", type=openapi.TYPE_BOOLEAN),
+            openapi.Parameter(
+                'lue',
+                openapi.IN_QUERY,
+                description="Filtrer par statut de lecture (true/false)",
+                type=openapi.TYPE_BOOLEAN
+            ),
         ],
         responses={200: NotificationSerializer(many=True)}
     )
     def get(self, request):
-        logger.info(f"Récupération des notifications pour {request.user.email}")
+        """Liste les notifications"""
+        logger.info(f"Récupération notifications pour {request.user.email}")
         
-        # Déterminer le type d'utilisateur
-        is_admin = hasattr(request.user, 'is_staff') and request.user.is_staff
+        user_type, user_instance = get_user_type(request.user)
         
-        if is_admin:
-            # Admin voit toutes les notifications
+        if user_type == 'admin':
+            # Admin voit toutes les notifications (nouvelles commandes notamment)
             notifications = Notification.objects.all()
+        elif user_type == 'agent':
+            notifications = Notification.objects.filter(agent=user_instance)
+        elif user_type == 'client':
+            notifications = Notification.objects.filter(client=user_instance)
         else:
-            try:
-                agent = Agent.objects.get(email=request.user.email)
-                notifications = Notification.objects.filter(agent=agent)
-            except Agent.DoesNotExist:
-                try:
-                    client = Client.objects.get(email=request.user.email)
-                    notifications = Notification.objects.filter(client=client)
-                except Client.DoesNotExist:
-                    return Response(
-                        {"error": "Utilisateur non trouvé"},
-                        status=status.HTTP_404_NOT_FOUND
-                    )
+            return Response(
+                {'error': 'Utilisateur non autorisé'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
-        # Filtrer par statut de lecture
-        lue = request.query_params.get('lue', None)
+        # Filtre lecture
+        lue = request.query_params.get('lue')
         if lue is not None:
             lue_bool = lue.lower() == 'true'
             notifications = notifications.filter(lue=lue_bool)
@@ -413,51 +501,56 @@ class NotificationListView(APIView):
         notifications = notifications.order_by('-created_at')
         
         serializer = NotificationSerializer(notifications, many=True)
-        logger.info(f"{notifications.count()} notifications récupérées")
+        logger.info(f"{notifications.count()} notifications trouvées")
         
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({
+            'count': notifications.count(),
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
 
 
 class NotificationMarkAsReadView(APIView):
-    """Marquer une notification comme lue"""
+    """Marque une notification comme lue"""
     permission_classes = [IsAuthenticated]
     
-    @swagger_auto_schema(responses={200: NotificationSerializer()})
+    @swagger_auto_schema(
+        operation_description="Marque une notification comme lue",
+        responses={200: NotificationSerializer()}
+    )
     def patch(self, request, pk):
-        logger.info(f"Marquage de la notification ID {pk} comme lue")
+        """Marque comme lue"""
+        logger.info(f"Marquage notification #{pk} comme lue")
         notification = get_object_or_404(Notification, pk=pk)
         
-        # Vérifier que la notification appartient à l'utilisateur
-        is_admin = hasattr(request.user, 'is_staff') and request.user.is_staff
+        user_type, user_instance = get_user_type(request.user)
         
-        if not is_admin:
-            try:
-                agent = Agent.objects.get(email=request.user.email)
-                if notification.agent != agent:
-                    return Response(
-                        {"error": "Cette notification ne vous appartient pas"},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-            except Agent.DoesNotExist:
-                try:
-                    client = Client.objects.get(email=request.user.email)
-                    if notification.client != client:
-                        return Response(
-                            {"error": "Cette notification ne vous appartient pas"},
-                            status=status.HTTP_403_FORBIDDEN
-                        )
-                except Client.DoesNotExist:
-                    return Response(
-                        {"error": "Utilisateur non autorisé"},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
+        # Vérifier ownership
+        if user_type == 'admin':
+            pass
+        elif user_type == 'agent':
+            if notification.agent != user_instance:
+                return Response(
+                    {'error': 'Cette notification ne vous appartient pas'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        elif user_type == 'client':
+            if notification.client != user_instance:
+                return Response(
+                    {'error': 'Cette notification ne vous appartient pas'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        else:
+            return Response(
+                {'error': 'Utilisateur non autorisé'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         notification.lue = True
         notification.save()
         
-        logger.info(f"Notification #{notification.id} marquée comme lue")
+        logger.info(f"Notification #{notification.id} marquée lue")
         
-        return Response(
-            NotificationSerializer(notification).data,
-            status=status.HTTP_200_OK
-        )
+        return Response({
+            'message': 'Notification marquée comme lue',
+            'notification': NotificationSerializer(notification).data
+        }, status=status.HTTP_200_OK)
