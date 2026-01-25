@@ -153,15 +153,6 @@ export function ProduitDeleteDialog({
             </div>
           </div>
           
-          {/* Avertissements */}
-          <Alert variant="destructive">
-            <AlertCircleIcon className="h-4 w-4" />
-            <AlertDescription>
-              La suppression d'un produit peut affecter les statistiques de vente et les rapports.
-              Cette action est permanente et ne peut pas être annulée.
-            </AlertDescription>
-          </Alert>
-          
           {/* Confirmation */}
           <div className="space-y-3">
             <Label htmlFor="confirm-delete" className="text-destructive">
@@ -186,17 +177,6 @@ export function ProduitDeleteDialog({
             {error && (
               <p className="text-sm text-red-500">{error}</p>
             )}
-          </div>
-          
-          {/* Impact */}
-          <div className="rounded-lg bg-muted p-3">
-            <div className="text-sm font-medium mb-2">Impact de la suppression :</div>
-            <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-4">
-              <li>Le produit disparaîtra de tous les catalogues</li>
-              <li>Les statistiques historiques seront conservées</li>
-              <li>La catégorie associée ne sera pas affectée</li>
-              <li>Les agents ne pourront plus commander ce produit</li>
-            </ul>
           </div>
         </div>
         

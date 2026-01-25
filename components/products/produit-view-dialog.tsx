@@ -53,6 +53,13 @@ export function ProduitViewDialog({
     return labels[unite] || unite;
   };
 
+  const formatDateSafe = (value?: string | null) => {
+    if (!value) return "Date inconnue";
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return "Date invalide";
+    return format(d, "dd MMMM yyyy à HH:mm", { locale: fr });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
@@ -194,34 +201,6 @@ export function ProduitViewDialog({
           </div>
           
           <Separator />
-          
-          {/* Informations temporelles */}
-          <div className="space-y-4">
-            <h3 className="font-semibold flex items-center gap-2">
-              <CalendarIcon className="h-4 w-4" />
-              Historique
-            </h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <div className="text-sm font-medium text-muted-foreground">
-                  Date de création
-                </div>
-                <div className="text-sm">
-                  {format(new Date(produit.created_at), "dd MMMM yyyy à HH:mm", { locale: fr })}
-                </div>
-              </div>
-              
-              <div className="space-y-1">
-                <div className="text-sm font-medium text-muted-foreground">
-                  Dernière mise à jour
-                </div>
-                <div className="text-sm">
-                  {format(new Date(produit.updated_at), "dd MMMM yyyy à HH:mm", { locale: fr })}
-                </div>
-              </div>
-            </div>
-          </div>
           
           {/* Note sur l'unité */}
           <div className={cn(
