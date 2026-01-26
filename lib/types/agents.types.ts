@@ -43,6 +43,8 @@ export interface AgentListItem {
   prenom: string;
   telephone: string;
   email: string;
+  adresse: string | null;
+  date_naissance: string | null;
   tricycle_plaque: string | null;
   statut: StatutAgent;
   created_at: string;

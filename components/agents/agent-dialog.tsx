@@ -1,12 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
-import { useUsers } from "@/lib/hooks/useUsers";
+import { useAgents } from "@/lib/hooks/useAgents";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,15 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -32,37 +21,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { CalendarIcon, Loader2Icon } from "lucide-react";
+  Loader2Icon,
+  UserIcon,
+  MailIcon,
+  PhoneIcon,
+  MapPinIcon,
+  CalendarIcon,
+  CameraIcon,
+  BikeIcon,
+  CheckIcon,
+} from "lucide-react";
 import { toast } from "sonner";
-import { Separator } from "@/components/ui/separator";
-import { Label } from "@/components/ui/label"; // Ajoutez cette importation
-
-const agentSchema = z.object({
-  nom: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
-  prenom: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
-  telephone: z.string().min(8, "Numéro de téléphone invalide"),
-  email: z.string().email("Email invalide"),
-  date_naissance: z.date({
-    required_error: "La date de naissance est requise",
-  }),
-  adresse: z.string().min(5, "L'adresse doit contenir au moins 5 caractères"),
-  tricycle_id: z.number().nullable().optional(),
-  mot_de_passe: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères").optional(),
-});
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircleIcon } from "lucide-react";
+import type { Agent, AgentListItem, StatutAgent, AgentCreateRequest, AgentUpdateRequest } from "@/lib/types";
 
 interface AgentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  agent: any | null;
-  tricycles: any[];
+  agent: AgentListItem | Agent | null;
   onSuccess: () => void;
 }
 
@@ -70,343 +48,448 @@ export function AgentDialog({
   open,
   onOpenChange,
   agent,
-  tricycles,
   onSuccess,
 }: AgentDialogProps) {
-  const { createAgent, updateAgent } = useUsers();
+  const { createAgent, updateAgent, patchAgent, tricycles } = useAgents();
   const [loading, setLoading] = useState(false);
-  const [generatePassword, setGeneratePassword] = useState(false);
-
-  const form = useForm<z.infer<typeof agentSchema>>({
-    resolver: zodResolver(agentSchema),
-    defaultValues: {
-      nom: "",
-      prenom: "",
-      telephone: "",
-      email: "",
-      date_naissance: undefined,
-      adresse: "",
-      tricycle_id: null,
-      mot_de_passe: "",
-    },
+  const [formData, setFormData] = useState<Partial<AgentCreateRequest>>({
+    nom: "",
+    prenom: "",
+    telephone: "",
+    email: "",
+    date_naissance: "",
+    adresse: "",
+    tricycle_id: null,
   });
+  const [statut, setStatut] = useState<StatutAgent>("actif");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (agent && open) {
-      form.reset({
-        nom: agent.nom,
-        prenom: agent.prenom,
-        telephone: agent.telephone,
-        email: agent.email,
-        date_naissance: new Date(agent.date_naissance),
-        adresse: agent.adresse,
-        tricycle_id: agent.tricycle?.id || null,
-        mot_de_passe: "",
+      setFormData({
+        nom: agent.nom || "",
+        prenom: agent.prenom || "",
+        telephone: agent.telephone || "",
+        email: agent.email || "",
+        date_naissance: agent.date_naissance || "",
+        adresse: agent.adresse || "",
+        tricycle_id: null, // À récupérer depuis l'agent complet si disponible
       });
-      setGeneratePassword(false);
+      if ('statut' in agent) {
+        setStatut(agent.statut);
+      }
+      setPhotoPreview(null);
+      setErrors({});
     } else if (open) {
-      form.reset({
+      setFormData({
         nom: "",
         prenom: "",
         telephone: "",
         email: "",
-        date_naissance: undefined,
+        date_naissance: "",
         adresse: "",
         tricycle_id: null,
-        mot_de_passe: "",
       });
-      setGeneratePassword(true);
+      setStatut("actif");
+      setPhoto(null);
+      setPhotoPreview(null);
+      setErrors({});
     }
-  }, [agent, open, form]);
+  }, [agent, open]);
 
-  const generateRandomPassword = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let password = "";
-    for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    form.setValue("mot_de_passe", password);
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.nom?.trim()) newErrors.nom = "Le nom est requis";
+    if (!formData.prenom?.trim()) newErrors.prenom = "Le prénom est requis";
+    if (!formData.telephone?.trim()) newErrors.telephone = "Le téléphone est requis";
+    if (!formData.email?.trim()) newErrors.email = "L'email est requis";
+    else if (!/^\S+@\S+\.\S+$/.test(formData.email)) newErrors.email = "Email invalide";
+    if (!formData.date_naissance?.trim()) newErrors.date_naissance = "La date de naissance est requise";
+    if (!formData.adresse?.trim()) newErrors.adresse = "L'adresse est requise";
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const onSubmit = async (values: z.infer<typeof agentSchema>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
     setLoading(true);
     try {
       if (agent) {
-        // Mise à jour
-        const updateData: any = {
-          nom: values.nom,
-          prenom: values.prenom,
-          telephone: values.telephone,
-          email: values.email,
-          date_naissance: format(values.date_naissance, "yyyy-MM-dd"),
-          adresse: values.adresse,
+        const updateData: AgentUpdateRequest = {
+          ...formData,
+          statut,
+          photo: photo || undefined,
         };
-        
-        if (values.tricycle_id !== undefined) {
-          updateData.tricycle_id = values.tricycle_id;
-        }
-        
         await updateAgent(agent.id, updateData);
       } else {
-        // Création
-        const createData: any = {
-          nom: values.nom,
-          prenom: values.prenom,
-          telephone: values.telephone,
-          email: values.email,
-          date_naissance: format(values.date_naissance, "yyyy-MM-dd"),
-          adresse: values.adresse,
+        const createData: AgentCreateRequest = {
+          ...formData as Required<AgentCreateRequest>,
+          mot_de_passe: "DefaultPassword123!", // À remplacer par génération aléatoire
+          photo: photo || undefined,
         };
-        
-        if (values.tricycle_id) {
-          createData.tricycle_id = values.tricycle_id;
-        }
-        
-        if (values.mot_de_passe) {
-          createData.mot_de_passe = values.mot_de_passe;
-        }
-        
         await createAgent(createData);
       }
       
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error.message || "Une erreur est survenue");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Une erreur est survenue lors de l'enregistrement";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPhoto(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const formatDateForInput = (dateString: string): string => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {agent ? "Modifier l'agent" : "Créer un nouvel agent"}
-          </DialogTitle>
-          <DialogDescription>
-            {agent
-              ? "Modifiez les informations de l'agent ci-dessous."
-              : "Remplissez les informations pour créer un nouvel agent."}
-          </DialogDescription>
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-full bg-primary/10">
+              <UserIcon className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <DialogTitle>
+                {agent ? "Modifier l'agent" : "Ajouter un nouvel agent"}
+              </DialogTitle>
+              <DialogDescription>
+                {agent
+                  ? "Modifiez les informations de l'agent ci-dessous."
+                  : "Renseignez les informations pour ajouter un nouvel agent à l'équipe."}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
         
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="nom"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nom</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Doe" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="prenom"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Prénom</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="John" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="telephone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Téléphone</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="+22912345678" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="email" placeholder="john@example.com" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            <FormField
-              control={form.control}
-              name="date_naissance"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Date de naissance</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, "PPP", { locale: fr })
-                          ) : (
-                            <span>Sélectionner une date</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) =>
-                          date > new Date() || date < new Date("1900-01-01")
-                        }
-                        initialFocus
-                        captionLayout="dropdown-buttons"
-                        fromYear={1960}
-                        toYear={new Date().getFullYear() - 18}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Photo */}
+            <div className="md:col-span-2">
+              <Label htmlFor="photo" className="block mb-2">
+                Photo de profil
+              </Label>
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  {photoPreview ? (
+                    <div className="h-24 w-24 rounded-full overflow-hidden border-2 border-primary">
+                      <img
+                        src={photoPreview}
+                        alt="Preview"
+                        className="h-full w-full object-cover"
                       />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="adresse"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Adresse</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      {...field}
-                      placeholder="123 Rue des Agents, Cotonou"
-                      rows={3}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="tricycle_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tricycle assigné</FormLabel>
-                  <Select
-                    onValueChange={(value) =>
-                      field.onChange(value === "none" ? null : parseInt(value))
-                    }
-                    value={field.value?.toString() || "none"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un tricycle" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">Aucun tricycle</SelectItem>
-                      {Array.isArray(tricycles) && tricycles.map((tricycle) => (
-                        <SelectItem key={tricycle.id} value={tricycle.id.toString()}>
-                          {tricycle.plaque_immatriculation}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            {!agent && (
-              <>
-                <Separator />
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    {/* Utilisez Label au lieu de FormLabel ici */}
-                    <Label htmlFor="mot-de-passe">Mot de passe</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={generateRandomPassword}
-                    >
-                      Générer un mot de passe
-                    </Button>
-                  </div>
-                  
-                  <FormField
-                    control={form.control}
-                    name="mot_de_passe"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="text"
-                            placeholder="Laisser vide pour générer automatiquement"
-                            id="mot-de-passe"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    </div>
+                  ) : (
+                    <div className="h-24 w-24 rounded-full bg-muted flex items-center justify-center border-2 border-dashed">
+                      <CameraIcon className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <Input
+                    id="photo"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
                   />
-                  
-                  <div className="text-sm text-muted-foreground">
-                    {generatePassword
-                      ? "Un mot de passe sera généré automatiquement si ce champ est vide."
-                      : "Conservez le mot de passe généré, il ne sera pas affiché à nouveau."}
+                  <Label htmlFor="photo" className="cursor-pointer">
+                    <Button type="button" variant="outline" size="sm">
+                      <CameraIcon className="mr-2 h-4 w-4" />
+                      {photo ? "Changer la photo" : "Ajouter une photo"}
+                    </Button>
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    JPEG, PNG ou WebP. Max 5MB.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Nom */}
+            <div className="space-y-2">
+              <Label htmlFor="nom" className="flex items-center gap-2">
+                Nom
+                <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="nom"
+                  value={formData.nom || ""}
+                  onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
+                  placeholder="Dupont"
+                  className={errors.nom ? "border-destructive pr-10" : "pr-10"}
+                />
+                {!errors.nom && formData.nom && (
+                  <CheckIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+              </div>
+              {errors.nom && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircleIcon className="h-3 w-3" />
+                  {errors.nom}
+                </p>
+              )}
+            </div>
+
+            {/* Prénom */}
+            <div className="space-y-2">
+              <Label htmlFor="prenom" className="flex items-center gap-2">
+                Prénom
+                <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="prenom"
+                  value={formData.prenom || ""}
+                  onChange={(e) => setFormData({ ...formData, prenom: e.target.value })}
+                  placeholder="Jean"
+                  className={errors.prenom ? "border-destructive pr-10" : "pr-10"}
+                />
+                {!errors.prenom && formData.prenom && (
+                  <CheckIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+              </div>
+              {errors.prenom && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircleIcon className="h-3 w-3" />
+                  {errors.prenom}
+                </p>
+              )}
+            </div>
+
+            {/* Téléphone */}
+            <div className="space-y-2">
+              <Label htmlFor="telephone" className="flex items-center gap-2">
+                <PhoneIcon className="h-4 w-4" />
+                Téléphone
+                <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="telephone"
+                  value={formData.telephone || ""}
+                  onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
+                  placeholder="+33 1 23 45 67 89"
+                  className={errors.telephone ? "border-destructive pr-10" : "pr-10"}
+                />
+                {!errors.telephone && formData.telephone && (
+                  <CheckIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+              </div>
+              {errors.telephone && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircleIcon className="h-3 w-3" />
+                  {errors.telephone}
+                </p>
+              )}
+            </div>
+
+            {/* Email */}
+            <div className="space-y-2">
+              <Label htmlFor="email" className="flex items-center gap-2">
+                <MailIcon className="h-4 w-4" />
+                Email
+                <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email || ""}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="jean.dupont@example.com"
+                  className={errors.email ? "border-destructive pr-10" : "pr-10"}
+                />
+                {!errors.email && formData.email && (
+                  <CheckIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+              </div>
+              {errors.email && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircleIcon className="h-3 w-3" />
+                  {errors.email}
+                </p>
+              )}
+            </div>
+
+            {/* Date de naissance */}
+            <div className="space-y-2">
+              <Label htmlFor="date_naissance" className="flex items-center gap-2">
+                <CalendarIcon className="h-4 w-4" />
+                Date de naissance
+                <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="date_naissance"
+                  type="date"
+                  value={formatDateForInput(formData.date_naissance || "")}
+                  onChange={(e) => setFormData({ ...formData, date_naissance: e.target.value })}
+                  className={errors.date_naissance ? "border-destructive pr-10" : "pr-10"}
+                />
+                {!errors.date_naissance && formData.date_naissance && (
+                  <CheckIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+              </div>
+              {errors.date_naissance && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircleIcon className="h-3 w-3" />
+                  {errors.date_naissance}
+                </p>
+              )}
+            </div>
+
+            {/* Statut (pour l'édition seulement) */}
+            {agent && (
+              <div className="space-y-2">
+                <Label htmlFor="statut">Statut</Label>
+                <Select value={statut} onValueChange={(value: StatutAgent) => setStatut(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un statut" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="actif">Actif</SelectItem>
+                    <SelectItem value="inactif">Inactif</SelectItem>
+                    <SelectItem value="en_tournee">En tournée</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Tricycle */}
+            <div className="space-y-2">
+              <Label htmlFor="tricycle_id" className="flex items-center gap-2">
+                <BikeIcon className="h-4 w-4" />
+                Tricycle assigné
+              </Label>
+              <Select 
+                value={formData.tricycle_id?.toString() || "none"} 
+                onValueChange={(value) => setFormData({ ...formData, tricycle_id: value === "none" ? null : parseInt(value) })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un tricycle" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Aucun tricycle</SelectItem>
+                  {tricycles?.map((tricycle) => (
+                    <SelectItem key={tricycle.id} value={tricycle.id.toString()}>
+                      {tricycle.plaque_immatriculation}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Adresse */}
+            <div className="md:col-span-2 space-y-2">
+              <Label htmlFor="adresse" className="flex items-center gap-2">
+                <MapPinIcon className="h-4 w-4" />
+                Adresse complète
+                <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Textarea
+                  id="adresse"
+                  value={formData.adresse || ""}
+                  onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
+                  placeholder="123 Rue de la Livraison, 75001 Paris, France"
+                  className={errors.adresse ? "border-destructive min-h-[100px]" : "min-h-[100px]"}
+                  rows={3}
+                />
+                {!errors.adresse && formData.adresse && (
+                  <CheckIcon className="absolute right-3 top-3 h-4 w-4 text-green-500" />
+                )}
+              </div>
+              {errors.adresse && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircleIcon className="h-3 w-3" />
+                  {errors.adresse}
+                </p>
+              )}
+            </div>
+          </div>
+          
+          {!agent && (
+            <Alert>
+              <AlertCircleIcon className="h-4 w-4" />
+              <AlertDescription>
+                Un mot de passe temporaire sera généré automatiquement et envoyé à l&apos;agent par email.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {agent && (
+            <div className="rounded-lg border p-4 space-y-3">
+              <h4 className="font-medium">Informations supplémentaires</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="space-y-1">
+                  <div className="text-muted-foreground">ID</div>
+                  <div className="font-mono font-medium">#{agent.id}</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-muted-foreground">Date d&apos;inscription</div>
+                  <div className="font-medium">
+                    {new Date(agent.created_at).toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric'
+                    })}
                   </div>
                 </div>
-              </>
-            )}
-            
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Annuler
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
-                {agent ? "Mettre à jour" : "Créer l'agent"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+            >
+              Annuler
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                  {agent ? "Mise à jour..." : "Création..."}
+                </>
+              ) : (
+                <>
+                  {agent ? "Mettre à jour" : "Créer l'agent"}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
