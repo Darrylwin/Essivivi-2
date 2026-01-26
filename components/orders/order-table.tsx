@@ -40,7 +40,6 @@ import {
   ArrowUpDownIcon,
   PackageIcon,
   UserIcon,
-  MapPinIcon,
   DollarSignIcon,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -258,10 +257,6 @@ export function OrderTable({
                   Assigner un agent
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => onViewDetails(order)}>
-                <MapPinIcon className="mr-2 h-4 w-4" />
-                Localiser sur carte
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => onDelete(order)}

@@ -27,7 +27,6 @@ import {
 import { toast } from "sonner";
 import { OrderTrackingMap } from "@/components/orders/order-tracking-map";
 import { DeliveryList } from "@/components/deliveries/delivery-list";
-import { CreateDeliveryDialog } from "@/components/deliveries/create-delivery-dialog";
 import type { StatutCommande } from "@/lib/types";
 
 export default function OrderDetailPage() {
@@ -38,7 +37,6 @@ export default function OrderDetailPage() {
   const { commandeDetails, loading, error, fetchCommandeDetails, clearError } = useOrders();
   const { livraisons, loading: deliveriesLoading, fetchLivraisonsByCommande } = useToursDeliveries();
   
-  const [createDeliveryOpen, setCreateDeliveryOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -67,12 +65,6 @@ export default function OrderDetailPage() {
     } finally {
       setRefreshing(false);
     }
-  };
-
-  const handleDeliveryCreated = () => {
-    setCreateDeliveryOpen(false);
-    loadData();
-    toast.success("Livraison créée avec succès");
   };
 
   const getStatusBadge = (statut: StatutCommande) => {
@@ -484,15 +476,6 @@ export default function OrderDetailPage() {
                     Historique des livraisons pour cette commande
                   </CardDescription>
                 </div>
-                {commandeDetails.statut !== 'livree' && commandeDetails.statut !== 'annulee' && (
-                  <Button
-                    size="sm"
-                    onClick={() => setCreateDeliveryOpen(true)}
-                    disabled={!commandeDetails.agent}
-                  >
-                    Nouvelle livraison
-                  </Button>
-                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -505,13 +488,6 @@ export default function OrderDetailPage() {
           </Card>
         </div>
       </div>
-
-      <CreateDeliveryDialog
-        open={createDeliveryOpen}
-        onOpenChange={setCreateDeliveryOpen}
-        orderId={commandeDetails.id}
-        onSuccess={handleDeliveryCreated}
-      />
     </div>
   );
 }

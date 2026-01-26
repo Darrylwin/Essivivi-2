@@ -107,48 +107,7 @@ export function DashboardCharts({ stats, loading = false }: DashboardChartsProps
       </Card>
 
       {/* Deuxième ligne - Graphiques comparés */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Répartition des agents */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Répartition des agents
-            </CardTitle>
-            <CardDescription>Statut des agents actifs</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={agentData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={40}
-                    outerRadius={70}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {agentData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-              {agentData.map((item, index) => (
-                <div key={index} className="space-y-1">
-                  <div className="text-sm font-medium">{item.value}</div>
-                  <div className="text-xs text-muted-foreground">{item.name}</div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
+      <div className="grid grid-cols-1 gap-6">
         {/* Chiffre d'affaires par heure */}
         <Card>
           <CardHeader>

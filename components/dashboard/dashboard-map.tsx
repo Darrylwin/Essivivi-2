@@ -244,7 +244,7 @@ export function DashboardMap({
           <div ref={mapContainerRef} className="h-full w-full rounded-lg" />
           
           {/* Légende */}
-          <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg z-[1000]">
+          <div className="absolute bottom-4 left-4 rounded-lg p-3 shadow-lg z-[1000]">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded-full bg-blue-500"></div>
@@ -264,7 +264,7 @@ export function DashboardMap({
           </div>
 
           {/* Statistiques */}
-          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg z-[1000]">
+          <div className="absolute top-4 right-4 rounded-lg p-3 shadow-lg z-[1000]">
             <div className="space-y-1">
               <div className="text-xs font-medium">Statistiques</div>
               <div className="text-xs">Agents: {new Set(positions.map(p => p.agent)).size}</div>
