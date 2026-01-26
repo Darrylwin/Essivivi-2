@@ -29,64 +29,93 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
-  EyeIcon,
   EditIcon,
   Trash2Icon,
   MoreVerticalIcon,
   PackageIcon,
+  EyeIcon,
   TagIcon,
   DollarSignIcon,
-  ImageIcon,
+  ScaleIcon,
+  ArrowUpDownIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { ProduitListItem, UniteVente } from "@/lib/types";
 
-interface ProduitTableProps {
-  produits: any[];
+interface ProductTableProps {
+  products: ProduitListItem[];
   loading: boolean;
-  onView: (produit: any) => void;
-  onEdit: (produit: any) => void;
-  onDelete: (produit: any) => void;
+  onEdit: (product: ProduitListItem) => void;
+  onDelete: (product: ProduitListItem) => void;
 }
 
-export function ProduitTable({
-  produits,
+export function ProductTable({
+  products,
   loading,
-  onView,
   onEdit,
   onDelete,
-}: ProduitTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+}: ProductTableProps) {
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: "prix_unitaire", desc: true }
+  ]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [rowSelection, setRowSelection] = useState({});
 
-  const columns: ColumnDef<any>[] = [
+  const getUnitBadge = (unite: UniteVente) => {
+    const unitConfig = {
+      sachet: { label: "Sachet", color: "bg-blue-100 text-blue-800" },
+      bouteille: { label: "Bouteille", color: "bg-green-100 text-green-800" },
+      canette: { label: "Canette", color: "bg-orange-100 text-orange-800" },
+      pack: { label: "Pack", color: "bg-purple-100 text-purple-800" },
+    };
+    
+    const config = unitConfig[unite];
+    return (
+      <Badge className={`${config.color} hover:${config.color}`}>
+        {config.label}
+      </Badge>
+    );
+  };
+
+  const formatPrice = (price: string): string => {
+    const num = parseFloat(price);
+    return isNaN(num) ? "0.00 FCFA" : `${num.toFixed(2)} FCFA`;
+  };
+
+  const columns: ColumnDef<ProduitListItem>[] = [
     {
       accessorKey: "nom",
-      header: "Produit",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="font-semibold hover:bg-transparent"
+          >
+            Produit
+            <ArrowUpDownIcon className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          {row.original.photo ? (
-            <div className="relative h-8 w-8 overflow-hidden rounded border">
-              <img
-                src={row.original.photo}
-                alt={row.original.nom}
-                className="h-full w-full object-cover"
-              />
-            </div>
-          ) : (
-            <PackageIcon className="h-4 w-4 text-muted-foreground" />
-          )}
-          <div>
-            <div className="font-medium">{row.getValue("nom")}</div>
-            <div className="text-sm text-muted-foreground">
-              {row.original.marque} {row.original.volume && `• ${row.original.volume}`}
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <PackageIcon className="h-4 w-4 text-primary" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-semibold">
+              {row.getValue("nom")}
+            </span>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <TagIcon className="h-3 w-3" />
+              {row.original.marque}
             </div>
           </div>
         </div>
@@ -97,38 +126,52 @@ export function ProduitTable({
       header: "Catégorie",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <TagIcon className="h-3 w-3" />
-          <Badge variant="outline" className="text-xs">
-            {row.getValue("categorie_nom")}
-          </Badge>
+          <TagIcon className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">{row.getValue("categorie_nom")}</span>
         </div>
       ),
+    },
+    {
+      accessorKey: "volume",
+      header: "Volume",
+      cell: ({ row }) => {
+        const volume = row.getValue("volume") as string | null;
+        return volume ? (
+          <div className="flex items-center gap-2">
+            <ScaleIcon className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm">{volume}</span>
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">-</span>
+        );
+      },
     },
     {
       accessorKey: "unite_vente",
       header: "Unité",
       cell: ({ row }) => {
-        const unite = row.getValue("unite_vente");
-        const labels = {
-          sachet: "Sachet",
-          bouteille: "Bouteille",
-          canette: "Canette",
-          pack: "Pack",
-        };
-        return (
-          <Badge variant="secondary">
-            {labels[unite as keyof typeof labels]}
-          </Badge>
-        );
+        const unite = row.getValue("unite_vente") as UniteVente;
+        return getUnitBadge(unite);
       },
     },
     {
       accessorKey: "prix_unitaire",
-      header: "Prix",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="font-semibold hover:bg-transparent"
+          >
+            Prix
+            <ArrowUpDownIcon className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <DollarSignIcon className="h-3 w-3 text-green-600" />
-          <span className="font-medium">{parseFloat(row.getValue("prix_unitaire")).toLocaleString('fr-FR')} FCFA</span>
+          <DollarSignIcon className="h-4 w-4 text-muted-foreground" />
+          <span className="font-bold">{formatPrice(row.getValue("prix_unitaire"))}</span>
         </div>
       ),
     },
@@ -136,10 +179,14 @@ export function ProduitTable({
       accessorKey: "actif",
       header: "Statut",
       cell: ({ row }) => {
-        const actif = row.getValue("actif");
-        return (
-          <Badge variant={actif ? "default" : "outline"}>
-            {actif ? "Actif" : "Inactif"}
+        const isActive = row.getValue("actif") as boolean;
+        return isActive ? (
+          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+            Actif
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-red-600 border-red-200">
+            Inactif
           </Badge>
         );
       },
@@ -148,7 +195,7 @@ export function ProduitTable({
       id: "actions",
       header: "Actions",
       cell: ({ row }) => {
-        const produit = row.original;
+        const product = row.original;
         
         return (
           <DropdownMenu>
@@ -158,20 +205,21 @@ export function ProduitTable({
                 <MoreVerticalIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => onView(produit)}>
-                <EyeIcon className="mr-2 h-4 w-4" />
-                Voir détails
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEdit(produit)}>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onEdit(product)}>
                 <EditIcon className="mr-2 h-4 w-4" />
                 Modifier
               </DropdownMenuItem>
+              <DropdownMenuItem className="text-muted-foreground">
+                <EyeIcon className="mr-2 h-4 w-4" />
+                Voir les détails
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => onDelete(produit)}
-                className="text-red-600 focus:text-red-600"
+                onClick={() => onDelete(product)}
+                className="text-destructive focus:text-destructive"
               >
                 <Trash2Icon className="mr-2 h-4 w-4" />
                 Supprimer
@@ -184,7 +232,7 @@ export function ProduitTable({
   ];
 
   const table = useReactTable({
-    data: produits,
+    data: products,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -200,23 +248,40 @@ export function ProduitTable({
       globalFilter,
       rowSelection,
     },
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
   });
 
-  if (loading && produits.length === 0) {
+  if (loading && products.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-muted-foreground">Chargement des produits...</div>
+      <div className="space-y-3">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="h-6 w-20" />
+            <Skeleton className="h-8 w-8 rounded-full" />
+          </div>
+        ))}
       </div>
     );
   }
 
-  if (!loading && produits.length === 0) {
+  if (!loading && products.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-8">
-        <PackageIcon className="h-12 w-12 text-muted-foreground mb-4" />
+      <div className="flex flex-col items-center justify-center p-12 text-center">
+        <div className="p-4 rounded-full bg-muted mb-4">
+          <PackageIcon className="h-12 w-12 text-muted-foreground" />
+        </div>
         <h3 className="text-lg font-semibold mb-2">Aucun produit trouvé</h3>
-        <p className="text-muted-foreground text-center mb-4">
-          Commencez par créer votre premier produit pour remplir votre catalogue.
+        <p className="text-muted-foreground max-w-md">
+          Aucun produit ne correspond à vos critères de recherche.
         </p>
       </div>
     );
@@ -224,40 +289,14 @@ export function ProduitTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between p-4">
-        <Input
-          placeholder="Filtrer les produits..."
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="max-w-sm"
-        />
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronRightIcon className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      
-      <div className="border rounded-md">
+      {/* Table */}
+      <div className="rounded-md border overflow-hidden">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-muted/50">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} className="h-12">
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -275,11 +314,10 @@ export function ProduitTable({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => onView(row.original)}
+                  className="hover:bg-muted/50 transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-3">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -302,47 +340,60 @@ export function ProduitTable({
         </Table>
       </div>
       
-      <div className="flex items-center justify-between px-2">
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          {table.getFilteredRowModel().rows.length} produit(s)
+          {table.getFilteredRowModel().rows.length} produit(s) au total
         </div>
         <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronsLeftIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-          </Button>
-          <span className="text-sm">
-            Page {table.getState().pagination.pageIndex + 1} sur{" "}
-            {table.getPageCount()}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronRightIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronsRightIcon className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.setPageIndex(0)}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronsLeftIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronLeftIcon className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-1 text-sm">
+              <span>Page</span>
+              <span className="font-semibold">
+                {table.getState().pagination.pageIndex + 1}
+              </span>
+              <span>sur</span>
+              <span className="font-semibold">
+                {table.getPageCount()}
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              <ChevronRightIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+              disabled={!table.getCanNextPage()}
+            >
+              <ChevronsRightIcon className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>

@@ -12,79 +12,64 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertTriangleIcon,
   Loader2Icon,
-  PackageIcon,
   AlertCircleIcon,
-  HashIcon,
+  PackageIcon,
+  TagIcon,
+  DollarSignIcon,
+  ScaleIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { ProduitListItem } from "@/lib/types";
 
-interface ProduitDeleteDialogProps {
+interface ProductDeleteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  produit: any | null;
+  product: ProduitListItem | null;
   onSuccess: () => void;
 }
 
-export function ProduitDeleteDialog({
+export function ProductDeleteDialog({
   open,
   onOpenChange,
-  produit,
+  product,
   onSuccess,
-}: ProduitDeleteDialogProps) {
+}: ProductDeleteDialogProps) {
   const { deleteProduit } = useProducts();
   const [loading, setLoading] = useState(false);
-  const [confirmText, setConfirmText] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const formatPrice = (price: string) => {
-    const num = parseFloat(price);
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'XOF',
-      minimumFractionDigits: 0,
-    }).format(num);
-  };
+  const [confirmationText, setConfirmationText] = useState("");
+  const [hasOrders, setHasOrders] = useState(false);
 
   const handleDelete = async () => {
-    if (!produit) return;
+    if (!product) return;
     
-    if (confirmText !== produit.nom) {
-      setError(`Veuillez taper "${produit.nom}" pour confirmer la suppression`);
+    if (confirmationText !== product.nom) {
+      toast.error("Veuillez taper exactement le nom du produit pour confirmer");
       return;
     }
     
     setLoading(true);
-    setError(null);
-    
     try {
-      await deleteProduit(produit.id);
+      await deleteProduit(product.id);
       onSuccess();
       onOpenChange(false);
-      setConfirmText("");
-      toast.success("Produit supprimé avec succès");
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de la suppression");
-      setError("Erreur lors de la suppression du produit");
+      setConfirmationText("");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Erreur lors de la suppression";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  if (!produit) return null;
+  if (!product) return null;
 
-  const getUniteLabel = (unite: string) => {
-    const labels: Record<string, string> = {
-      sachet: 'Sachet',
-      bouteille: 'Bouteille',
-      canette: 'Canette',
-      pack: 'Pack',
-    };
-    return labels[unite] || unite;
+  const formatPrice = (price: string): string => {
+    const num = parseFloat(price);
+    return isNaN(num) ? "0.00 FCFA" : `${num.toFixed(2)} FCFA`;
   };
 
   return (
@@ -92,91 +77,109 @@ export function ProduitDeleteDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <AlertTriangleIcon className="h-5 w-5 text-red-500" />
-            <DialogTitle>Supprimer le produit</DialogTitle>
+            <div className="p-2 rounded-full bg-destructive/10">
+              <AlertTriangleIcon className="h-5 w-5 text-destructive" />
+            </div>
+            <div>
+              <DialogTitle className="text-destructive">Supprimer le produit</DialogTitle>
+              <DialogDescription>
+                Cette action est irréversible. Le produit sera définitivement supprimé.
+              </DialogDescription>
+            </div>
           </div>
-          <DialogDescription>
-            Cette action est irréversible. Le produit sera définitivement supprimé.
-          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-6 py-4">
-          {/* Information du produit */}
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-            <div className="flex items-start gap-3">
-              {produit.photo ? (
-                <div className="w-16 h-16 rounded overflow-hidden border">
-                  <img
-                    src={produit.photo}
-                    alt={produit.nom}
-                    className="w-full h-full object-cover"
-                  />
+          {/* Product Info */}
+          <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-3">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-muted">
+                  <PackageIcon className="h-5 w-5" />
                 </div>
-              ) : (
-                <div className="w-16 h-16 rounded bg-muted flex items-center justify-center">
-                  <PackageIcon className="h-8 w-8 text-muted-foreground" />
-                </div>
-              )}
-              
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-lg">{produit.nom}</div>
-                    <div className="text-sm text-muted-foreground flex items-center gap-2">
-                      <span>{produit.marque}</span>
-                      {produit.volume && <span>• {produit.volume}</span>}
-                    </div>
+                <div>
+                  <div className="font-bold text-lg">
+                    {product.nom}
                   </div>
-                  <div className="font-bold text-primary">
-                    {formatPrice(produit.prix_unitaire)}
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="flex items-center gap-1">
-                    <HashIcon className="h-3 w-3" />
-                    <span className="text-muted-foreground">ID :</span>
-                    <span className="font-mono">#{produit.id}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Unité :</span>
-                    <span className="ml-1">{getUniteLabel(produit.unite_vente)}</span>
-                  </div>
-                  <div className="col-span-2">
-                    <span className="text-muted-foreground">Catégorie :</span>
-                    <span className="ml-1 font-medium">
-                      {produit.categorie_nom || `Catégorie #${produit.categorie}`}
-                    </span>
+                  <div className="text-sm text-muted-foreground">
+                    {product.marque}
                   </div>
                 </div>
               </div>
             </div>
+            
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="space-y-1">
+                <div className="text-muted-foreground flex items-center gap-1">
+                  <TagIcon className="h-3 w-3" />
+                  Catégorie
+                </div>
+                <div className="font-medium">{product.categorie_nom}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-muted-foreground">Statut</div>
+                <div className="font-medium">
+                  {product.actif ? 'Actif' : 'Inactif'}
+                </div>
+              </div>
+              {product.volume && (
+                <div className="space-y-1">
+                  <div className="text-muted-foreground flex items-center gap-1">
+                    <ScaleIcon className="h-3 w-3" />
+                    Volume
+                  </div>
+                  <div className="font-medium">{product.volume}</div>
+                </div>
+              )}
+              <div className="space-y-1">
+                <div className="text-muted-foreground flex items-center gap-1">
+                  <DollarSignIcon className="h-3 w-3" />
+                  Prix
+                </div>
+                <div className="font-bold">{formatPrice(product.prix_unitaire)}</div>
+              </div>
+            </div>
           </div>
+          
+          {/* Warning Alerts */}
+          {hasOrders ? (
+            <Alert variant="destructive">
+              <AlertCircleIcon className="h-4 w-4" />
+              <AlertDescription className="font-medium">
+                Ce produit a des commandes en cours. Veuillez d&apos;abord traiter ces commandes avant de supprimer le produit.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Alert variant="destructive">
+              <AlertCircleIcon className="h-4 w-4" />
+              <AlertDescription>
+                <div className="font-medium mb-1">Attention : Action irréversible</div>
+                La suppression d&apos;un produit affectera toutes les commandes et statistiques qui y sont associées.
+                Cette action ne peut pas être annulée.
+              </AlertDescription>
+            </Alert>
+          )}
           
           {/* Confirmation */}
           <div className="space-y-3">
-            <Label htmlFor="confirm-delete" className="text-destructive">
-              Confirmez la suppression
-            </Label>
-            <div className="text-sm text-muted-foreground">
-              Pour confirmer, tapez <span className="font-bold">"{produit.nom}"</span> dans le champ ci-dessous
+            <div className="text-sm">
+              <p className="font-medium text-destructive mb-2">
+                Confirmez la suppression :
+              </p>
+              <p className="text-muted-foreground">
+                Tapez <span className="font-mono font-bold bg-muted px-2 py-1 rounded">
+                  {product.nom}
+                </span> pour confirmer
+              </p>
             </div>
-            
             <Input
               id="confirm-delete"
-              value={confirmText}
-              onChange={(e) => {
-                setConfirmText(e.target.value);
-                setError(null);
-              }}
-              placeholder={`Saisir "${produit.nom}"`}
-              className={error ? "border-red-500" : ""}
-              disabled={loading}
+              placeholder={`Saisir "${product.nom}"`}
+              value={confirmationText}
+              onChange={(e) => setConfirmationText(e.target.value)}
+              className={confirmationText === product.nom ? "border-green-500" : ""}
+              disabled={hasOrders}
             />
-            
-            {error && (
-              <p className="text-sm text-red-500">{error}</p>
-            )}
           </div>
         </div>
         
@@ -186,8 +189,7 @@ export function ProduitDeleteDialog({
             variant="outline"
             onClick={() => {
               onOpenChange(false);
-              setConfirmText("");
-              setError(null);
+              setConfirmationText("");
             }}
             disabled={loading}
           >
@@ -197,10 +199,16 @@ export function ProduitDeleteDialog({
             type="button"
             variant="destructive"
             onClick={handleDelete}
-            disabled={loading || confirmText !== produit.nom}
+            disabled={loading || hasOrders || confirmationText !== product.nom}
           >
-            {loading && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
-            Supprimer définitivement
+            {loading ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Suppression...
+              </>
+            ) : (
+              "Supprimer définitivement"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
