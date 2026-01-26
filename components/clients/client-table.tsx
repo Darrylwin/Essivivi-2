@@ -42,20 +42,17 @@ import {
   MoreVerticalIcon,
   StoreIcon,
   UserIcon,
-  MapPinIcon,
   CalendarIcon,
-  PhoneIcon,
   MailIcon,
-  BuildingIcon,
 } from "lucide-react";
-import type { ClientList } from "@/lib/types";
+import type { ClientListItem } from "@/lib/types/clients.types";
 
 interface ClientTableProps {
-  clients: ClientList[];
+  clients: ClientListItem[];
   loading: boolean;
-  onView: (client: ClientList) => void;
-  onEdit: (client: ClientList) => void;
-  onDelete: (client: ClientList) => void;
+  onView: (client: ClientListItem) => void;
+  onEdit: (client: ClientListItem) => void;
+  onDelete: (client: ClientListItem) => void;
 }
 
 export function ClientTable({
@@ -72,13 +69,13 @@ export function ClientTable({
 
   const getTypeBadge = (type: string) => {
     const variants = {
-      détaillant: "default",
+      detaillant: "default",
       grossiste: "secondary",
       institution: "outline",
     } as const;
 
     const labels = {
-      détaillant: "Détaillant",
+      detaillant: "Détaillant",
       grossiste: "Grossiste",
       institution: "Institution",
     };
@@ -108,7 +105,7 @@ export function ClientTable({
     });
   };
 
-  const columns: ColumnDef<ClientList>[] = [
+  const columns: ColumnDef<ClientListItem>[] = [
     {
       accessorKey: "code_client",
       header: "Code",
