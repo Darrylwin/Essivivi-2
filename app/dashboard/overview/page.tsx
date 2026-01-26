@@ -17,7 +17,6 @@ import {
   TrendingUp, 
   TrendingDown, 
   DollarSign,
-  Clock,
   MapPin,
   Navigation,
   RefreshCw,
@@ -25,7 +24,6 @@ import {
   BarChart3,
   Activity,
   Timer,
-  Bike
 } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardMap } from "@/components/dashboard/dashboard-map";
@@ -263,10 +261,7 @@ export default function OverviewPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Column - Charts */}
             <div className="lg:col-span-2 space-y-6">
-              <DashboardCharts
-                stats={dashboardStats}
-                loading={dashboardLoading}
-              />
+              <DashboardCharts />
               
               {/* Additional Metrics */}
               <Card>
