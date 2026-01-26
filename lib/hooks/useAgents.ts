@@ -259,7 +259,37 @@ export function useAgents(): UseAgentsReturn {
     
     try {
       const response = await tricyclesApi.list();
-      setTricycles(response);
+      
+      // Debug log
+      console.log('Tricycles API response:', response);
+      console.log('Response type:', typeof response);
+      console.log('Is array?', Array.isArray(response));
+      
+      // Handle different response formats
+      let tricyclesArray: Tricycle[] = [];
+      
+      if (Array.isArray(response)) {
+        // Format 1: Direct array
+        tricyclesArray = response;
+      } else if (response && typeof response === 'object') {
+        // Format 2: Object with pagination
+        if ('results' in response && Array.isArray(response.results)) {
+          tricyclesArray = response.results;
+        } else if ('data' in response && Array.isArray(response.data)) {
+          // Format 3: Object with data
+          tricyclesArray = response.data;
+        } else {
+          // Try to extract array from object
+          const values = Object.values(response);
+          const arrayFromObject = values.find(v => Array.isArray(v));
+          if (Array.isArray(arrayFromObject)) {
+            tricyclesArray = arrayFromObject;
+          }
+        }
+      }
+      
+      console.log('Extracted tricycles array:', tricyclesArray);
+      setTricycles(tricyclesArray);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to fetch tricycles";
       setTricyclesError(errorMessage);

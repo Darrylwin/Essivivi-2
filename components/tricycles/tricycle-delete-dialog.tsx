@@ -130,25 +130,6 @@ export function TricycleDeleteDialog({
             </div>
           </div>
           
-          {/* Warning Alerts */}
-          {isAssigned ? (
-            <Alert variant="destructive">
-              <AlertCircleIcon className="h-4 w-4" />
-              <AlertDescription className="font-medium">
-                Ce tricycle est actuellement assigné à un agent. Veuillez d&apos;abord le désassigner avant de le supprimer.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <Alert variant="destructive">
-              <AlertCircleIcon className="h-4 w-4" />
-              <AlertDescription>
-                <div className="font-medium mb-1">Attention : Action irréversible</div>
-                La suppression d&apos;un tricycle affectera tous les agents qui y sont associés.
-                Assurez-vous qu&apos;aucun agent n&apos;utilise actuellement ce tricycle.
-              </AlertDescription>
-            </Alert>
-          )}
-          
           {/* Confirmation */}
           <div className="space-y-3">
             <div className="text-sm">

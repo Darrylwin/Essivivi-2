@@ -31,7 +31,7 @@ export class TricyclesApi {
    * GET /tricycles
    */
   async list(): Promise<Tricycle[]> {
-    return this.client.get<Tricycle[]>("/tricycles");
+    return this.client.get<Tricycle[]>("/tricycles/");
   }
 
   /**
@@ -39,7 +39,7 @@ export class TricyclesApi {
    * GET /tricycles/{id}
    */
   async get(id: number): Promise<Tricycle> {
-    return this.client.get<Tricycle>(`/tricycles/${id}`);
+    return this.client.get<Tricycle>(`/tricycles/${id}/`);
   }
 
   /**
@@ -47,7 +47,7 @@ export class TricyclesApi {
    * POST /tricycles
    */
   async create(data: TricycleCreateRequest): Promise<Tricycle> {
-    return this.client.post<Tricycle>("/tricycles", data);
+    return this.client.post<Tricycle>("/tricycles/", data);
   }
 
   /**
@@ -55,7 +55,7 @@ export class TricyclesApi {
    * PUT /tricycles/{id}
    */
   async update(id: number, data: TricycleUpdateRequest): Promise<Tricycle> {
-    return this.client.put<Tricycle>(`/tricycles/${id}`, data);
+    return this.client.put<Tricycle>(`/tricycles/${id}/`, data);
   }
 
   /**
@@ -63,7 +63,7 @@ export class TricyclesApi {
    * DELETE /tricycles/{id}
    */
   async delete(id: number): Promise<void> {
-    return this.client.delete<void>(`/tricycles/${id}`);
+    return this.client.delete<void>(`/tricycles/${id}/`);
   }
 }
 
@@ -84,7 +84,7 @@ export class AgentsApi {
       queryParams.search = params.search;
     }
 
-    return this.client.get<AgentListResponse>("/admin/agents", queryParams);
+    return this.client.get<AgentListResponse>("/admin/agents/", queryParams);
   }
 
   /**
@@ -92,7 +92,7 @@ export class AgentsApi {
    * GET /admin/agents/{id}
    */
   async get(id: number): Promise<Agent> {
-    return this.client.get<Agent>(`/admin/agents/${id}`);
+    return this.client.get<Agent>(`/admin/agents/${id}/`);
   }
 
   /**
@@ -115,7 +115,7 @@ export class AgentsApi {
     }
     if (data.mot_de_passe) formData.append('mot_de_passe', data.mot_de_passe);
 
-    return this.client.post<AgentCreateResponse>("/admin/agents", formData);
+    return this.client.post<AgentCreateResponse>("/admin/agents/", formData);
   }
 
   /**
@@ -137,7 +137,7 @@ export class AgentsApi {
     }
     if (data.statut) formData.append('statut', data.statut);
 
-    return this.client.put<AgentUpdateResponse>(`/admin/agents/${id}`, formData);
+    return this.client.put<AgentUpdateResponse>(`/admin/agents/${id}/`, formData);
   }
 
   /**
@@ -159,7 +159,7 @@ export class AgentsApi {
     }
     if (data.statut) formData.append('statut', data.statut);
 
-    return this.client.patch<AgentUpdateResponse>(`/admin/agents/${id}`, formData);
+    return this.client.patch<AgentUpdateResponse>(`/admin/agents/${id}/`, formData);
   }
 
   /**
@@ -167,7 +167,7 @@ export class AgentsApi {
    * DELETE /admin/agents/{id}
    */
   async delete(id: number): Promise<AgentDeleteResponse> {
-    return this.client.delete<AgentDeleteResponse>(`/admin/agents/${id}`);
+    return this.client.delete<AgentDeleteResponse>(`/admin/agents/${id}/`);
   }
 }
 
