@@ -70,7 +70,8 @@ export function DashboardMap({
     
     const initMap = () => {
       try {
-        const map = L.map(mapContainerRef.current!).setView([14.6937, -17.4441], 12);
+        // Default view: center on Togo (Lomé) with country-level zoom
+        const map = L.map(mapContainerRef.current!).setView([6.1725, 1.2314], 7);
         mapRef.current = map;
 
         // Ajouter la couche OpenStreetMap

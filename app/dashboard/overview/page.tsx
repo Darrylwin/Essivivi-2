@@ -40,7 +40,6 @@ export default function OverviewPage() {
     fetchDashboardStats,
     positions,
     trackingLoading,
-    trackingError,
     fetchPositions,
     agentsEnTournee,
     fetchAgentsEnTournee,
@@ -48,26 +47,23 @@ export default function OverviewPage() {
   } = useTrackingDashboard();
 
   const [activeTab, setActiveTab] = useState("overview");
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
   // Initial fetch
   useEffect(() => {
     fetchData();
-    
-    // Setup auto-refresh
-    if (autoRefresh) {
-      const interval = setInterval(() => {
-        fetchData();
-      }, 20000); // 20 secondes
-      setRefreshInterval(interval);
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
-    };
+  // Auto-refresh when enabled
+  useEffect(() => {
+    if (!autoRefresh) return;
+
+    const interval = setInterval(() => {
+      fetchData();
+    }, 20000); // 20 secondes
+
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh]);
 
