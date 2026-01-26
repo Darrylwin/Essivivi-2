@@ -171,7 +171,6 @@ export function CategoryDialog({
             <div className="space-y-2">
               <Label htmlFor="description" className="flex items-center gap-2">
                 Description
-                <span className="text-xs text-muted-foreground">(optionnel)</span>
               </Label>
               <div className="relative">
                 <Textarea

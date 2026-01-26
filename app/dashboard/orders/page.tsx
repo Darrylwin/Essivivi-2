@@ -1,305 +1,373 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { CommandeTable } from "@/components/orders/commande-table";
-import { CommandeStats } from "@/components/orders/commande-stats";
-import { CommandeMap } from "@/components/orders/commande-map";
-import { CommandeAssignDialog } from "@/components/orders/commande-assign-dialog";
-import { CommandeStatusDialog } from "@/components/orders/commande-status-dialog";
-import { CommandeViewDialog } from "@/components/orders/commande-view-dialog";
-import { NotificationBadge } from "@/components/orders/notification-badge";
+import { OrderTable } from "@/components/orders/order-table";
+import { OrderAssignDialog } from "@/components/orders/order-assign-dialog";
+import { OrderDeleteDialog } from "@/components/orders/order-delete-dialog";
 import { useOrders } from "@/lib/hooks/useOrders";
-import { useUsers } from "@/lib/hooks/useUsers";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  PlusIcon,
+  SearchIcon,
   RefreshCwIcon,
-  MapIcon,
-  TableIcon,
-  BarChartIcon,
+  PackageIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  TruckIcon,
+  XCircleIcon,
+  AlertCircleIcon,
+  FilterIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Commande, CommandeStatut, CommandeFilters as Filters } from "@/lib/types";
+import type { CommandeListItem, StatutCommande } from "@/lib/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useRouter } from "next/navigation";
 
 export default function OrdersPage() {
   const router = useRouter();
   const {
     commandes,
-    selectedCommande,
-    isLoading,
+    loading,
     error,
-    loadCommandes,
-    loadCommande,
-    assignCommande,
-    changeCommandeStatus,
+    fetchCommandes,
     clearError,
   } = useOrders();
 
-  const { agents, clients, fetchAgents, fetchClients } = useUsers();
-
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [selectedCommandeAction, setSelectedCommandeAction] = useState<Commande | null>(null);
-  const [activeTab, setActiveTab] = useState("table");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<CommandeListItem | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatutCommande | "all">("all");
 
-  // Initial fetch
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchData = async (filters?: Filters) => {
+  const fetchData = async () => {
     try {
-      await Promise.all([
-        loadCommandes(filters),
-        fetchAgents(),
-        fetchClients(),
-      ]);
-    } catch (error) {
-      toast.error("Erreur lors du chargement des données");
+      await fetchCommandes();
+      toast.success("Liste des commandes actualisée");
+    } catch (err) {
+      toast.error("Erreur lors du chargement des commandes");
     }
   };
 
-  const handleFilter = (filters: Filters) => {
-    loadCommandes(filters);
-  };
-
-  const handleView = (commande: Commande) => {
-    setSelectedCommandeAction(commande);
-    loadCommande(commande.id);
-    setViewDialogOpen(true);
-  };
-
-  const handleAssign = (commande: Commande) => {
-    setSelectedCommandeAction(commande);
+  const handleAssign = (orderItem: CommandeListItem) => {
+    setSelectedOrder(orderItem);
     setAssignDialogOpen(true);
   };
 
-  const handleChangeStatus = (commande: Commande) => {
-    setSelectedCommandeAction(commande);
-    setStatusDialogOpen(true);
+  const handleDelete = (orderItem: CommandeListItem) => {
+    setSelectedOrder(orderItem);
+    setDeleteDialogOpen(true);
   };
 
-  const handleAssignConfirm = async (commandeId: number, agentId: number) => {
-    try {
-      await assignCommande(commandeId, agentId);
-      setAssignDialogOpen(false);
-      toast.success("Commande assignée avec succès");
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de l'assignation");
-    }
+  const handleViewDetails = (orderItem: CommandeListItem) => {
+    router.push(`/dashboard/orders/${orderItem.id}`);
   };
 
-  const handleStatusChangeConfirm = async (commandeId: number, statut: CommandeStatut) => {
-    try {
-      await changeCommandeStatus(commandeId, statut);
-      setStatusDialogOpen(false);
-      toast.success("Statut modifié avec succès");
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors du changement de statut");
-    }
+  const handleOrderAssigned = () => {
+    setAssignDialogOpen(false);
+    fetchData();
+    toast.success("Commande assignée avec succès");
   };
 
-  // Calcul des statistiques
-  const calculateStats = () => {
-    const stats = {
-      total: commandes.length,
-      en_attente: commandes.filter(c => c.statut === 'en_attente').length,
-      acceptee: commandes.filter(c => c.statut === 'acceptee').length,
-      en_cours: commandes.filter(c => c.statut === 'en_cours').length,
-      livree: commandes.filter(c => c.statut === 'livree').length,
-      annulee: commandes.filter(c => c.statut === 'annulee').length,
-      montant_total: commandes.reduce((sum, c) => sum + parseFloat(c.montant_total), 0).toString(),
-    };
-    return stats;
+  const handleOrderDeleted = () => {
+    setDeleteDialogOpen(false);
+    fetchData();
+    toast.success("Commande supprimée avec succès");
   };
+
+  const safeOrders = commandes?.results && Array.isArray(commandes.results) ? commandes.results : [];
+  
+  const filteredOrders = safeOrders.filter((orderItem) => {
+    const matchesSearch = searchQuery === "" || 
+      orderItem.client_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      orderItem.client_nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      orderItem.agent_nom?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      orderItem.agent_numero?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = statusFilter === "all" || orderItem.statut === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const enAttenteCount = safeOrders.filter(o => o.statut === 'en_attente').length;
+  const accepteeCount = safeOrders.filter(o => o.statut === 'acceptee').length;
+  const enCoursCount = safeOrders.filter(o => o.statut === 'en_cours').length;
+  const livreeCount = safeOrders.filter(o => o.statut === 'livree').length;
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center p-8">
-        <div className="text-red-500 mb-4">{error}</div>
-        <Button onClick={() => { clearError(); fetchData(); }}>
-          Réessayer
-        </Button>
+      <div className="container mx-auto p-6">
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircleIcon className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <div className="flex flex-col items-center justify-center p-8 rounded-lg border border-dashed">
+          <AlertCircleIcon className="h-12 w-12 text-destructive mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Erreur de chargement</h3>
+          <p className="text-muted-foreground text-center mb-4">
+            Impossible de charger les commandes. Vérifiez votre connexion.
+          </p>
+          <Button onClick={() => { clearError(); fetchData(); }}>
+            <RefreshCwIcon className="mr-2 h-4 w-4" />
+            Réessayer
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col p-4 md:p-6">
+    <div className="container mx-auto p-4 md:p-6 space-y-6">
       <div className="flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Gestion des Commandes</h1>
-            <p className="text-muted-foreground">
-              Gérez les commandes, les livraisons et les notifications
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <NotificationBadge />
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchData()}
-              disabled={isLoading}
-            >
-              <RefreshCwIcon className="mr-2 h-4 w-4" />
-              Actualiser
-            </Button>
-            
-            <Button size="sm" onClick={() => router.push('/orders/notifications')}>
-              Voir notifications
-            </Button>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <PackageIcon className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Gestion des Commandes</h1>
+              <p className="text-muted-foreground">
+                Suivez et gérez toutes les commandes clients
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Stats */}
-        <CommandeStats stats={calculateStats()} loading={isLoading} />
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">En attente</CardTitle>
+              <ClockIcon className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-16" /> : enAttenteCount}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Non assignées
+              </p>
+            </CardContent>
+          </Card>
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="table" className="flex items-center gap-2">
-              <TableIcon className="h-4 w-4" />
-              Liste
-            </TabsTrigger>
-            <TabsTrigger value="map" className="flex items-center gap-2">
-              <MapIcon className="h-4 w-4" />
-              Carte
-            </TabsTrigger>
-            <TabsTrigger value="stats" className="flex items-center gap-2">
-              <BarChartIcon className="h-4 w-4" />
-              Statistiques
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="table" className="mt-4">
-            <Card>
-              <CardContent className="p-0">
-                <CommandeTable
-                  commandes={commandes}
-                  loading={isLoading}
-                  onView={handleView}
-                  onEdit={() => {}} // Pas d'édition directe depuis la table
-                  onAssign={handleAssign}
-                  onChangeStatus={handleChangeStatus}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="map" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapIcon className="h-5 w-5" />
-                  Carte des livraisons
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CommandeMap
-                  commandes={commandes}
-                  onMarkerClick={handleView}
-                  height="600px"
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="stats" className="mt-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Répartition par statut</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {[
-                      { label: 'En attente', value: calculateStats().en_attente, color: 'bg-amber-500' },
-                      { label: 'Acceptées', value: calculateStats().acceptee, color: 'bg-blue-500' },
-                      { label: 'En cours', value: calculateStats().en_cours, color: 'bg-indigo-500' },
-                      { label: 'Livrées', value: calculateStats().livree, color: 'bg-green-500' },
-                      { label: 'Annulées', value: calculateStats().annulee, color: 'bg-red-500' },
-                    ].map((item) => (
-                      <div key={item.label} className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">{item.label}</span>
-                          <span className="text-sm font-bold">{item.value}</span>
-                        </div>
-                        <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${item.color} rounded-full transition-all`}
-                            style={{
-                              width: `${(item.value / calculateStats().total) * 100}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Activité récente</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {commandes.slice(0, 5).map((commande) => (
-                      <div key={commande.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <div className="font-medium">Commande #{commande.id}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {commande.client_nom}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold">
-                            {parseFloat(commande.montant_total).toLocaleString('fr-FR')} FCFA
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(commande.created_at).toLocaleDateString('fr-FR')}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Acceptées</CardTitle>
+              <CheckCircleIcon className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-16" /> : accepteeCount}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Assignées aux agents
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">En cours</CardTitle>
+              <TruckIcon className="h-4 w-4 text-purple-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-16" /> : enCoursCount}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                En livraison
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Livrées</CardTitle>
+              <CheckCircleIcon className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-16" /> : livreeCount}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Terminées
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Dialogs */}
-      <CommandeViewDialog
-        open={viewDialogOpen}
-        onOpenChange={setViewDialogOpen}
-        commande={selectedCommande}
-      />
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle>Commandes</CardTitle>
+              <CardDescription>
+                Liste de toutes les commandes
+              </CardDescription>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchData}
+                disabled={loading}
+              >
+                <RefreshCwIcon className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        
+        <CardContent>
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher par client, code, agent..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Select value={statusFilter} onValueChange={(value: StatutCommande | "all") => setStatusFilter(value)}>
+                  <SelectTrigger className="w-[180px]">
+                    <FilterIcon className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Filtrer par statut" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les statuts</SelectItem>
+                    <SelectItem value="en_attente">
+                      <div className="flex items-center gap-2">
+                        <ClockIcon className="h-4 w-4 text-orange-500" />
+                        En attente
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="acceptee">
+                      <div className="flex items-center gap-2">
+                        <CheckCircleIcon className="h-4 w-4 text-blue-500" />
+                        Acceptée
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="en_cours">
+                      <div className="flex items-center gap-2">
+                        <TruckIcon className="h-4 w-4 text-purple-500" />
+                        En cours
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="livree">
+                      <div className="flex items-center gap-2">
+                        <CheckCircleIcon className="h-4 w-4 text-green-500" />
+                        Livrée
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="annulee">
+                      <div className="flex items-center gap-2">
+                        <XCircleIcon className="h-4 w-4 text-red-500" />
+                        Annulée
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-      <CommandeAssignDialog
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-muted-foreground">
+                {loading ? (
+                  <Skeleton className="h-4 w-32" />
+                ) : (
+                  `${filteredOrders.length} commande(s) trouvée(s)`
+                )}
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  Total: {safeOrders.length}
+                </Badge>
+              </div>
+            </div>
+          </div>
+
+          {loading && !commandes ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {filteredOrders.length === 0 && !loading ? (
+                <div className="flex flex-col items-center justify-center p-12 text-center">
+                  <div className="p-4 rounded-full bg-muted mb-4">
+                    <PackageIcon className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Aucune commande trouvée</h3>
+                  <p className="text-muted-foreground mb-6 max-w-md">
+                    {searchQuery || statusFilter !== "all" 
+                      ? "Aucune commande ne correspond à vos critères de recherche."
+                      : "Aucune commande n'a encore été passée."}
+                  </p>
+                  {searchQuery || statusFilter !== "all" ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setStatusFilter("all");
+                      }}
+                    >
+                      Effacer les filtres
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <OrderTable
+                  orders={filteredOrders}
+                  loading={loading}
+                  onAssign={handleAssign}
+                  onDelete={handleDelete}
+                  onViewDetails={handleViewDetails}
+                />
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <OrderAssignDialog
         open={assignDialogOpen}
         onOpenChange={setAssignDialogOpen}
-        commande={selectedCommandeAction}
-        agents={agents}
-        onAssign={handleAssignConfirm}
+        order={selectedOrder}
+        onSuccess={handleOrderAssigned}
       />
 
-      <CommandeStatusDialog
-        open={statusDialogOpen}
-        onOpenChange={setStatusDialogOpen}
-        commande={selectedCommandeAction}
-        onChangeStatus={handleStatusChangeConfirm}
+      <OrderDeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        order={selectedOrder}
+        onSuccess={handleOrderDeleted}
       />
     </div>
   );

@@ -369,7 +369,6 @@ export function ProductDialog({
               <Label htmlFor="volume" className="flex items-center gap-2">
                 <ScaleIcon className="h-4 w-4" />
                 Volume/Poids
-                <span className="text-xs text-muted-foreground">(optionnel)</span>
               </Label>
               <div className="relative">
                 <Input

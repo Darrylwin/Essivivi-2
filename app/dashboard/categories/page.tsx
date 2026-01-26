@@ -233,21 +233,7 @@ export default function CategoriesPage() {
               </CardDescription>
             </div>
             
-            <div className="flex items-center gap-2">
-              <Toggle
-                pressed={showProducts}
-                onPressedChange={(pressed) => {
-                  setShowProducts(pressed);
-                  fetchCategories({ avec_produits: pressed });
-                }}
-                aria-label="Afficher les produits"
-                variant="outline"
-                size="sm"
-              >
-                <PackageIcon className="mr-2 h-4 w-4" />
-                Produits
-              </Toggle>
-              
+            <div className="flex items-center gap-2">              
               <Button
                 variant="outline"
                 size="sm"

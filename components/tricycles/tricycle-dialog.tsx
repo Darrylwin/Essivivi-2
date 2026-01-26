@@ -178,27 +178,6 @@ export function TricycleDialog({
               </p>
             </div>
 
-            {tricycle && (
-              <div className="rounded-lg border p-4 space-y-3">
-                <h4 className="font-medium">Informations du tricycle</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="space-y-1">
-                    <div className="text-muted-foreground">ID</div>
-                    <div className="font-mono font-medium">#{tricycle.id}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-muted-foreground">Créé le</div>
-                    <div className="font-medium">
-                      {new Date(tricycle.created_at).toLocaleDateString('fr-FR', {
-                        day: '2-digit',
-                        month: 'long',
-                        year: 'numeric'
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
           
           <Alert>

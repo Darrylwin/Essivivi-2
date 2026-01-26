@@ -212,10 +212,6 @@ export function TricycleTable({
                 <EditIcon className="mr-2 h-4 w-4" />
                 Modifier
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-muted-foreground">
-                <EyeIcon className="mr-2 h-4 w-4" />
-                Voir les détails
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => onDelete(tricycle)}

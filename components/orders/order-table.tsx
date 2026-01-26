@@ -9,8 +9,6 @@ import {
   SortingState,
   useReactTable,
   getPaginationRowModel,
-  ColumnFiltersState,
-  getFilteredRowModel,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -21,7 +19,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,47 +32,82 @@ import {
   ChevronRightIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
-  EditIcon,
+  UserPlusIcon,
   Trash2Icon,
   MoreVerticalIcon,
-  TagIcon,
   CalendarIcon,
-  HashIcon,
   EyeIcon,
-  PackageIcon,
-  CheckIcon,
-  XIcon,
   ArrowUpDownIcon,
+  PackageIcon,
+  UserIcon,
+  MapPinIcon,
+  DollarSignIcon,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { CategorieListItem } from "@/lib/types";
+import type { CommandeListItem, StatutCommande } from "@/lib/types";
 
-interface CategoryTableProps {
-  categories: CategorieListItem[];
+interface OrderTableProps {
+  orders: CommandeListItem[];
   loading: boolean;
-  onEdit: (category: CategorieListItem) => void;
-  onDelete: (category: CategorieListItem) => void;
+  onAssign: (order: CommandeListItem) => void;
+  onDelete: (order: CommandeListItem) => void;
+  onViewDetails: (order: CommandeListItem) => void;
 }
 
-export function CategoryTable({
-  categories,
+export function OrderTable({
+  orders,
   loading,
-  onEdit,
+  onAssign,
   onDelete,
-}: CategoryTableProps) {
+  onViewDetails,
+}: OrderTableProps) {
   const [sorting, setSorting] = useState<SortingState>([
-    { id: "nombre_produits", desc: true }
+    { id: "created_at", desc: true }
   ]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
-  const [rowSelection, setRowSelection] = useState({});
 
-  const columns: ColumnDef<CategorieListItem>[] = [
+  const getStatusBadge = (statut: StatutCommande) => {
+    switch (statut) {
+      case 'en_attente':
+        return (
+          <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">
+            En attente
+          </Badge>
+        );
+      case 'acceptee':
+        return (
+          <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+            Acceptée
+          </Badge>
+        );
+      case 'en_cours':
+        return (
+          <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">
+            En cours
+          </Badge>
+        );
+      case 'livree':
+        return (
+          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+            Livrée
+          </Badge>
+        );
+      case 'annulee':
+        return (
+          <Badge variant="outline" className="text-red-600 border-red-200">
+            Annulée
+          </Badge>
+        );
+      default:
+        return <Badge variant="outline">{statut}</Badge>;
+    }
+  };
+
+  const columns: ColumnDef<CommandeListItem>[] = [
     {
-      accessorKey: "nom",
+      accessorKey: "client_code",
       header: ({ column }) => {
         return (
           <Button
@@ -83,7 +115,7 @@ export function CategoryTable({
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
             className="font-semibold hover:bg-transparent"
           >
-            Catégorie
+            Client
             <ArrowUpDownIcon className="ml-2 h-4 w-4" />
           </Button>
         );
@@ -91,22 +123,51 @@ export function CategoryTable({
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
-            <TagIcon className="h-4 w-4 text-primary" />
+            <UserIcon className="h-4 w-4 text-primary" />
           </div>
           <div className="flex flex-col">
             <span className="font-semibold">
-              {row.getValue("nom")}
+              {row.original.client_nom}
             </span>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <HashIcon className="h-3 w-3" />
-              ID: #{row.original.id}
-            </div>
+            <span className="text-xs text-muted-foreground">
+              Code: {row.original.client_code}
+            </span>
           </div>
         </div>
       ),
     },
     {
-      accessorKey: "nombre_produits",
+      accessorKey: "agent_nom",
+      header: "Agent assigné",
+      cell: ({ row }) => {
+        const agentNom = row.original.agent_nom;
+        const agentNumero = row.original.agent_numero;
+        
+        return agentNom && agentNumero ? (
+          <div className="flex items-center gap-2">
+            <UserIcon className="h-4 w-4 text-muted-foreground" />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">{agentNom}</span>
+              <span className="text-xs text-muted-foreground">{agentNumero}</span>
+            </div>
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground italic">Non assigné</span>
+        );
+      },
+    },
+    {
+      accessorKey: "quantite_totale",
+      header: "Quantité",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <PackageIcon className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">{row.getValue("quantite_totale")} articles</span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "montant_total",
       header: ({ column }) => {
         return (
           <Button
@@ -114,33 +175,59 @@ export function CategoryTable({
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
             className="font-semibold hover:bg-transparent"
           >
-            Produits
+            Montant
             <ArrowUpDownIcon className="ml-2 h-4 w-4" />
           </Button>
         );
       },
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <PackageIcon className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium">{row.getValue("nombre_produits")}</span>
+          <DollarSignIcon className="h-4 w-4 text-green-600" />
+          <span className="text-sm font-bold text-green-600">
+            {parseFloat(row.getValue("montant_total")).toLocaleString('fr-FR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })} FCFA
+          </span>
         </div>
       ),
     },
     {
-      accessorKey: "actif",
+      accessorKey: "statut",
       header: "Statut",
       cell: ({ row }) => {
-        const isActive = row.getValue("actif") as boolean;
-        return isActive ? (
-          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-            <CheckIcon className="mr-1 h-3 w-3" />
-            Active
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-red-600 border-red-200">
-            <XIcon className="mr-1 h-3 w-3" />
-            Inactive
-          </Badge>
+        const statut = row.getValue("statut") as StatutCommande;
+        return getStatusBadge(statut);
+      },
+    },
+    {
+      accessorKey: "created_at",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="font-semibold hover:bg-transparent"
+          >
+            Date création
+            <ArrowUpDownIcon className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const date = new Date(row.getValue("created_at"));
+        return (
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">
+                {format(date, "dd MMM yyyy", { locale: fr })}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {format(date, "HH:mm", { locale: fr })}
+              </span>
+            </div>
+          </div>
         );
       },
     },
@@ -148,7 +235,7 @@ export function CategoryTable({
       id: "actions",
       header: "Actions",
       cell: ({ row }) => {
-        const category = row.original;
+        const order = row.original;
         
         return (
           <DropdownMenu>
@@ -158,16 +245,26 @@ export function CategoryTable({
                 <MoreVerticalIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onEdit(category)}>
-                <EditIcon className="mr-2 h-4 w-4" />
-                Modifier
+              <DropdownMenuItem onClick={() => onViewDetails(order)}>
+                <EyeIcon className="mr-2 h-4 w-4" />
+                Voir détails
+              </DropdownMenuItem>
+              {!order.est_assignee && order.statut === 'en_attente' && (
+                <DropdownMenuItem onClick={() => onAssign(order)}>
+                  <UserPlusIcon className="mr-2 h-4 w-4" />
+                  Assigner un agent
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => onViewDetails(order)}>
+                <MapPinIcon className="mr-2 h-4 w-4" />
+                Localiser sur carte
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => onDelete(category)}
+                onClick={() => onDelete(order)}
                 className="text-destructive focus:text-destructive"
               >
                 <Trash2Icon className="mr-2 h-4 w-4" />
@@ -181,21 +278,14 @@ export function CategoryTable({
   ];
 
   const table = useReactTable({
-    data: categories,
+    data: orders,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
-    onRowSelectionChange: setRowSelection,
     state: {
       sorting,
-      columnFilters,
-      globalFilter,
-      rowSelection,
     },
     initialState: {
       pagination: {
@@ -204,7 +294,7 @@ export function CategoryTable({
     },
   });
 
-  if (loading && categories.length === 0) {
+  if (loading && orders.length === 0) {
     return (
       <div className="space-y-3">
         {[1, 2, 3, 4, 5].map((i) => (
@@ -222,23 +312,8 @@ export function CategoryTable({
     );
   }
 
-  if (!loading && categories.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 text-center">
-        <div className="p-4 rounded-full bg-muted mb-4">
-          <TagIcon className="h-12 w-12 text-muted-foreground" />
-        </div>
-        <h3 className="text-lg font-semibold mb-2">Aucune catégorie trouvée</h3>
-        <p className="text-muted-foreground max-w-md">
-          Aucune catégorie ne correspond à vos critères de recherche.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
-      {/* Table */}
       <div className="rounded-md border overflow-hidden">
         <Table>
           <TableHeader className="bg-muted/50">
@@ -262,8 +337,8 @@ export function CategoryTable({
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                  className="hover:bg-muted/50 transition-colors"
+                  className="hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => onViewDetails(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="py-3">
@@ -289,10 +364,9 @@ export function CategoryTable({
         </Table>
       </div>
       
-      {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          {table.getFilteredRowModel().rows.length} catégorie(s) au total
+          {table.getFilteredRowModel().rows.length} commande(s) au total
         </div>
         <div className="flex items-center space-x-2">
           <div className="flex items-center space-x-1">

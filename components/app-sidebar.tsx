@@ -2,11 +2,16 @@
 
 import * as React from "react"
 import {
-  CameraIcon,
-  FileCodeIcon,
-  FileTextIcon,
-  UsersIcon,
-  TruckIcon,
+  Users,
+  UserCircle,
+  Truck,
+  Package,
+  ShoppingCart,
+  Layers,
+  Camera,
+  FileText,
+  Code,
+  PackageCheck,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -29,79 +34,89 @@ const data = {
   },
   navMain: [
     {
+      title: "Tableau de bord",
+      url: "/dashboard/overvicatetableew",
+      icon: Layers,
+    },
+    {
       title: "Agents",
       url: "/dashboard/agents",
-      icon: UsersIcon,
+      icon: Users,
     },
     {
       title: "Clients",
       url: "/dashboard/clients",
-      icon: UsersIcon,
-    },
-    {
-      title: "Tricycles",
-      url: "/dashboard/tricycles",
-      icon: TruckIcon,
+      icon: UserCircle,
     },
     {
       title: "Produits",
       url: "/dashboard/products",
-      icon: FileTextIcon,
-    },
-    {
-      title: "Commandes passées",
-      url: "/dashboard/orders",
-      icon: FileTextIcon,
+      icon: Package,
     },
     {
       title: "Catégories",
       url: "/dashboard/categories",
-      icon: FileCodeIcon,
+      icon: Layers,
+    },
+    {
+      title: "Commandes",
+      url: "/dashboard/orders",
+      icon: ShoppingCart,
+    },
+    {
+      title: "Livraisons",
+      url: "/dashboard/deliveries",
+      icon: PackageCheck,
+    },
+    {
+      title: "Tricycles",
+      url: "/dashboard/tricycles",
+      icon: Truck,
     },
   ],
   navClouds: [
     {
       title: "Capture",
-      icon: CameraIcon,
+      icon: Camera,
       isActive: true,
       url: "#",
       items: [
         {
-          title: "Active Proposals",
+          title: "Propositions actives",
           url: "#",
         },
         {
-          title: "Archived",
+          title: "Archivées",
           url: "#",
         },
       ],
     },
     {
-      title: "Proposal",
-      icon: FileTextIcon,
+      title: "Propositions",
+      icon: FileText,
       url: "#",
       items: [
         {
-          title: "Active Proposals",
+          title: "Propositions actives",
           url: "#",
         },
         {
-          title: "Archived",
+          title: "Archivées",
           url: "#",
         },
       ],
     },
     {
       title: "Prompts",
-      icon: FileCodeIcon,
+      icon: Code,
       url: "#",
       items: [
         {
-          title: "Active Proposals",
+          title: "Prompts actifs",
           url: "#",
         },
         {
-          title: "Archived",
+          title: "Archivés",
           url: "#",
         },
       ],
@@ -122,7 +137,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
               <a href="/dashboard/overview">
-                <span className="text-base font-semibold">Essivivi Admin</span>
+                <div className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  <span className="text-base font-semibold">Essivivi Admin</span>
+                </div>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>

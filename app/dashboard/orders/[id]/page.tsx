@@ -24,7 +24,7 @@ import {
   Loader2Icon,
   AlertCircleIcon,
 } from "lucide-react";
-import { CommandeMap } from "@/components/orders/commande-map";
+import { CommandeMap } from "@/components/orders/order-map";
 import { toast } from "sonner";
 
 export default function CommandeDetailPage() {

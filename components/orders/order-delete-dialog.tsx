@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useProducts } from "@/lib/hooks/useProducts";
+import { useOrders } from "@/lib/hooks/useOrders";
 import {
   Dialog,
   DialogContent,
@@ -16,44 +16,42 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertTriangleIcon,
   Loader2Icon,
-  AlertCircleIcon,
   PackageIcon,
-  TagIcon,
+  UserIcon,
   DollarSignIcon,
-  ScaleIcon,
+  CalendarIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { ProduitListItem } from "@/lib/types";
+import type { CommandeListItem } from "@/lib/types";
 
-interface ProductDeleteDialogProps {
+interface OrderDeleteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  product: ProduitListItem | null;
+  order: CommandeListItem | null;
   onSuccess: () => void;
 }
 
-export function ProductDeleteDialog({
+export function OrderDeleteDialog({
   open,
   onOpenChange,
-  product,
+  order,
   onSuccess,
-}: ProductDeleteDialogProps) {
-  const { deleteProduit } = useProducts();
+}: OrderDeleteDialogProps) {
+  const { deleteCommande } = useOrders();
   const [loading, setLoading] = useState(false);
   const [confirmationText, setConfirmationText] = useState("");
-  const [hasOrders, setHasOrders] = useState(false);
 
   const handleDelete = async () => {
-    if (!product) return;
+    if (!order) return;
     
-    if (confirmationText !== product.nom) {
-      toast.error("Veuillez taper exactement le nom du produit pour confirmer");
+    if (confirmationText !== "SUPPRIMER") {
+      toast.error("Veuillez taper SUPPRIMER en majuscules pour confirmer");
       return;
     }
     
     setLoading(true);
     try {
-      await deleteProduit(product.id);
+      await deleteCommande(order.id);
       onSuccess();
       onOpenChange(false);
       setConfirmationText("");
@@ -65,11 +63,16 @@ export function ProductDeleteDialog({
     }
   };
 
-  if (!product) return null;
+  if (!order) return null;
 
-  const formatPrice = (price: string): string => {
-    const num = parseFloat(price);
-    return isNaN(num) ? "0.00 FCFA" : `${num.toFixed(2)} FCFA`;
+  const formatDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   return (
@@ -81,29 +84,26 @@ export function ProductDeleteDialog({
               <AlertTriangleIcon className="h-5 w-5 text-destructive" />
             </div>
             <div>
-              <DialogTitle className="text-destructive">Supprimer le produit</DialogTitle>
+              <DialogTitle className="text-destructive">Supprimer la commande</DialogTitle>
               <DialogDescription>
-                Cette action est irréversible. Le produit sera définitivement supprimé.
+                Cette action est irréversible. La commande sera définitivement supprimée.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
         
         <div className="space-y-6 py-4">
-          {/* Product Info */}
           <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-3">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-muted">
-                  <PackageIcon className="h-5 w-5" />
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-muted">
+                <PackageIcon className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <div className="font-bold text-lg">
+                  Commande #{order.id}
                 </div>
-                <div>
-                  <div className="font-bold text-lg">
-                    {product.nom}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {product.marque}
-                  </div>
+                <div className="text-sm text-muted-foreground">
+                  Client: {order.client_nom}
                 </div>
               </div>
             </div>
@@ -111,37 +111,52 @@ export function ProductDeleteDialog({
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="space-y-1">
                 <div className="text-muted-foreground flex items-center gap-1">
-                  <TagIcon className="h-3 w-3" />
-                  Catégorie
+                  <UserIcon className="h-3 w-3" />
+                  Code client
                 </div>
-                <div className="font-medium">{product.categorie_nom}</div>
+                <div className="font-medium">{order.client_code}</div>
               </div>
+              
               <div className="space-y-1">
-                <div className="text-muted-foreground">Statut</div>
-                <div className="font-medium">
-                  {product.actif ? 'Actif' : 'Inactif'}
+                <div className="text-muted-foreground flex items-center gap-1">
+                  <PackageIcon className="h-3 w-3" />
+                  Quantité
                 </div>
+                <div className="font-medium">{order.quantite_totale} articles</div>
               </div>
-              {product.volume && (
-                <div className="space-y-1">
-                  <div className="text-muted-foreground flex items-center gap-1">
-                    <ScaleIcon className="h-3 w-3" />
-                    Volume
-                  </div>
-                  <div className="font-medium">{product.volume}</div>
-                </div>
-              )}
+              
               <div className="space-y-1">
                 <div className="text-muted-foreground flex items-center gap-1">
                   <DollarSignIcon className="h-3 w-3" />
-                  Prix
+                  Montant total
                 </div>
-                <div className="font-bold">{formatPrice(product.prix_unitaire)}</div>
+                <div className="font-bold text-green-600">
+                  {parseFloat(order.montant_total).toLocaleString('fr-FR', {
+                    minimumFractionDigits: 2,
+                  })} FCFA
+                </div>
+              </div>
+              
+              <div className="space-y-1">
+                <div className="text-muted-foreground flex items-center gap-1">
+                  <CalendarIcon className="h-3 w-3" />
+                  Date création
+                </div>
+                <div className="font-medium text-xs">{formatDate(order.created_at)}</div>
               </div>
             </div>
+            
+            {order.est_assignee && order.agent_nom && (
+              <Alert variant="destructive">
+                <AlertTriangleIcon className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Attention:</strong> Cette commande est assignée à l&apos;agent {order.agent_nom} ({order.agent_numero}). 
+                  La suppression annulera l&apos;assignation.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
           
-          {/* Confirmation */}
           <div className="space-y-3">
             <div className="text-sm">
               <p className="font-medium text-destructive mb-2">
@@ -149,17 +164,16 @@ export function ProductDeleteDialog({
               </p>
               <p className="text-muted-foreground">
                 Tapez <span className="font-mono font-bold bg-muted px-2 py-1 rounded">
-                  {product.nom}
-                </span> pour confirmer
+                  SUPPRIMER
+                </span> en majuscules pour confirmer
               </p>
             </div>
             <Input
               id="confirm-delete"
-              placeholder={`Saisir "${product.nom}"`}
+              placeholder="Saisir SUPPRIMER"
               value={confirmationText}
               onChange={(e) => setConfirmationText(e.target.value)}
-              className={confirmationText === product.nom ? "border-green-500" : ""}
-              disabled={hasOrders}
+              className={confirmationText === "SUPPRIMER" ? "border-green-500" : ""}
             />
           </div>
         </div>
@@ -180,7 +194,7 @@ export function ProductDeleteDialog({
             type="button"
             variant="destructive"
             onClick={handleDelete}
-            disabled={loading || hasOrders || confirmationText !== product.nom}
+            disabled={loading || confirmationText !== "SUPPRIMER"}
           >
             {loading ? (
               <>

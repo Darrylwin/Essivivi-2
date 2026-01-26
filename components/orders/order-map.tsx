@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { MapPinIcon, Loader2Icon } from "lucide-react";
+import { MapPinIcon } from "lucide-react";
 import type { Commande } from "@/lib/types";
 
 interface CommandeMapProps {
