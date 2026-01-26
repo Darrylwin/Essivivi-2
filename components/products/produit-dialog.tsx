@@ -205,7 +205,7 @@ export function ProductDialog({
               <Label htmlFor="photo" className="block mb-2">
                 Photo du produit
               </Label>
-              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4">
                 <div className="relative">
                   {photoPreview ? (
                     <div className="h-24 w-24 rounded-lg overflow-hidden border-2 border-primary">

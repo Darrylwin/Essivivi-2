@@ -25,6 +25,7 @@ import type {
   TricycleCreateRequest,
   TricycleUpdateRequest,
 } from "../types";
+import { toast } from "sonner";
 
 interface UseAgentsReturn {
   // Agents
@@ -254,47 +255,42 @@ export function useAgents(): UseAgentsReturn {
   }, [agent, agents]);
 
   const fetchTricycles = useCallback(async (): Promise<void> => {
-    setTricyclesLoading(true);
-    setTricyclesError(null);
+  setTricyclesLoading(true);
+  setTricyclesError(null);
+  
+  try {
+    const response = await tricyclesApi.list();
     
-    try {
-      const response = await tricyclesApi.list();
-      
-      // Debug log
-      console.log('Tricycles API response:', response);
-      console.log('Response type:', typeof response);
-      console.log('Is array?', Array.isArray(response));
-      
-      // Handle different response formats
-      let tricyclesArray: Tricycle[] = [];
-      
-      if (Array.isArray(response)) {
-        // Format 1: Direct array
-        tricyclesArray = response;
-      } else if (response && typeof response === 'object') {
-        // Format 2: Object with pagination
-        if ('results' in response && Array.isArray(response.results)) {
-          tricyclesArray = response.results;
-        } else {
-          // Try to extract array from object
-          const values = Object.values(response);
-          const arrayFromObject = values.find(v => Array.isArray(v));
-          if (Array.isArray(arrayFromObject)) {
-            tricyclesArray = arrayFromObject;
-          }
-        }
-      }
-      
-      console.log('Extracted tricycles array:', tricyclesArray);
-      setTricycles(tricyclesArray);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to fetch tricycles";
-      setTricyclesError(errorMessage);
-      throw err;
-    } finally {
-      setTricyclesLoading(false);
+    // Debug log - à garder temporairement
+    console.log('Tricycles API response:', response);
+    console.log('Response type:', typeof response);
+    
+    let tricyclesArray: Tricycle[] = [];
+    
+    // Format 1: Direct array
+    if (Array.isArray(response)) {
+      tricyclesArray = response;
     }
-  }, []);
+    // Format 2: Object avec pagination (tricyclesApi retourne probablement { results: [], count: X })
+    else if (response && typeof response === 'object') {
+      // Si l'API retourne { results: [], count: X }
+      if ('results' in response && Array.isArray(response.results)) {
+        tricyclesArray = response.results;
+      }
+    }
+    
+    console.log('Extracted tricycles array:', tricyclesArray);
+    setTricycles(tricyclesArray);
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Failed to fetch tricycles";
+    setTricyclesError(errorMessage);
+    console.error('Error fetching tricycles:', err);
+    toast.error("Impossible de charger la liste des tricycles");
+    throw err;
+  } finally {
+    setTricyclesLoading(false);
+  }
+}, []);
 
   const fetchTricycle = useCallback(async (id: number): Promise<void> => {
     setTricyclesLoading(true);

@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BarChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Bar, PieChart, Pie, Cell } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, DollarSign } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTrackingDashboard } from "@/lib/hooks/useTrackingDashboard";
 import { ChartAreaInteractive } from "../chart-area-interactive";
 import { ChartBarInteractive } from "../chart-bar-interactive";
@@ -14,13 +14,43 @@ interface DashboardChartsProps {
   loading?: boolean;
 }
 
+type TimeRange = "7d" | "30d" | "90d";
+
+// Fonction utilitaire pour extraire un nombre d'une chaîne monétaire
+const extractNumberFromCurrency = (currencyString?: string | null): number => {
+  if (!currencyString) return 0;
+  
+  try {
+    // Essayez de convertir directement si c'est déjà un nombre
+    if (typeof currencyString === 'number') return currencyString;
+    
+    // Extraire les chiffres, points décimaux et signes négatifs
+    const matches = currencyString.match(/-?\d+(\.\d+)?/g);
+    if (matches && matches.length > 0) {
+      return parseFloat(matches[0]);
+    }
+    
+    return 0;
+  } catch (error) {
+    console.error('Error parsing currency:', error);
+    return 0;
+  }
+};
+
 export function DashboardCharts({ loading = false }: DashboardChartsProps) {
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("7d");
+  const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const { dashboardStats, dashboardLoading, fetchDashboardStats } = useTrackingDashboard();
 
   useEffect(() => {
     fetchDashboardStats();
   }, [fetchDashboardStats]);
+
+  // Fonction de gestion du changement de période
+  const handleTimeRangeChange = useCallback((value: string) => {
+    if (value === "7d" || value === "30d" || value === "90d") {
+      setTimeRange(value);
+    }
+  }, []);
 
   const agentData = [
     { 
@@ -40,9 +70,14 @@ export function DashboardCharts({ loading = false }: DashboardChartsProps) {
     }
   ];
 
+  // Générer les données de revenus avec une sécurité améliorée
   const revenueData = Array.from({ length: 8 }, (_, i) => {
     const hour = 8 + i * 2;
-    const baseRevenue = parseFloat(dashboardStats?.montant_total_aujourdhui.replace(/[^0-9.-]+/g, "") || "0");
+    
+    // Extraire le montant de base de manière sécurisée
+    const baseRevenue = extractNumberFromCurrency(dashboardStats?.montant_total_aujourdhui);
+    
+    // Facteur pour simuler une distribution horaire réaliste
     const hourFactor = Math.sin((i / 7) * Math.PI) * 0.5 + 0.5;
     
     return {
@@ -97,7 +132,7 @@ export function DashboardCharts({ loading = false }: DashboardChartsProps) {
                 </CardTitle>
                 <CardDescription>Répartition horaire du chiffre d&apos;affaires</CardDescription>
               </div>
-              <Select value={timeRange} onValueChange={(value) => setTimeRange(value as "7d" | "30d" | "90d")}>
+              <Select value={timeRange} onValueChange={handleTimeRangeChange}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Période" />
                 </SelectTrigger>

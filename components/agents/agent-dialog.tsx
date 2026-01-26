@@ -35,9 +35,8 @@ import {
   EyeOffIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
-import type { Agent, AgentListItem, StatutAgent, AgentCreateRequest, AgentUpdateRequest } from "@/lib/types";
+import type { Agent, AgentListItem, StatutAgent, AgentCreateRequest } from "@/lib/types";
 
 interface AgentDialogProps {
   open: boolean;
@@ -82,7 +81,7 @@ export function AgentDialog({
 
   // Aussi charger les tricycles si l'agent a un tricycle assigné
   useEffect(() => {
-    if (agent && open && agent.tricycle_plaque && !tricycles) {
+    if (agent && open && !tricycles) {
       fetchTricycles().catch(error => {
         console.error("Erreur lors du chargement des tricycles:", error);
         toast.error("Impossible de charger la liste des tricycles");
@@ -102,14 +101,6 @@ export function AgentDialog({
         tricycle_id: null, // On va le mettre à jour après
         mot_de_passe: "",
       });
-      
-      // Si l'agent a un tricycle, récupérer l'ID depuis la liste des tricycles
-      if (agent.tricycle_plaque && tricycles) {
-        const tricycle = tricycles.find(t => t.plaque_immatriculation === agent.tricycle_plaque);
-        if (tricycle) {
-          setFormData(prev => ({ ...prev, tricycle_id: tricycle.id }));
-        }
-      }
       
       if ('statut' in agent) {
         setStatut(agent.statut);
@@ -557,34 +548,6 @@ export function AgentDialog({
               )}
             </div>
           </div>
-          
-          {agent && (
-            <div className="rounded-lg border p-4 space-y-3">
-              <h4 className="font-medium">Informations supplémentaires</h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="space-y-1">
-                  <div className="text-muted-foreground">ID</div>
-                  <div className="font-mono font-medium">#{agent.id}</div>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-muted-foreground">Date d&apos;inscription</div>
-                  <div className="font-medium">
-                    {new Date(agent.created_at).toLocaleDateString('fr-FR', {
-                      day: '2-digit',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </div>
-                </div>
-              </div>
-              <Alert className="mt-3">
-                <AlertCircleIcon className="h-4 w-4" />
-                <AlertDescription>
-                  Pour changer le mot de passe, utilisez la fonctionnalité dédiée dans le profil de l&apos;agent.
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
           
           <DialogFooter>
             <Button
