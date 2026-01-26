@@ -1,12 +1,14 @@
 "use client";
 
 import { TricycleCard } from "./tricycle-card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tricycle } from "@/lib/types";
 
 interface TricycleGridProps {
-  tricycles: any[];
+  tricycles: Tricycle[];
   loading: boolean;
-  onEdit: (tricycle: any) => void;
-  onDelete: (tricycle: any) => void;
+  onEdit: (tricycle: Tricycle) => void;
+  onDelete: (tricycle: Tricycle) => void;
 }
 
 export function TricycleGrid({
@@ -18,8 +20,12 @@ export function TricycleGrid({
   if (loading && tricycles.length === 0) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="space-y-3">
+            <Skeleton className="h-48 w-full rounded-lg" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
         ))}
       </div>
     );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useUsers } from "@/lib/hooks/useUsers";
+import { useAgents } from "@/lib/hooks/useAgents";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,14 +13,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2Icon, BikeIcon, AlertCircleIcon } from "lucide-react";
+import { Loader2Icon, BikeIcon, CheckIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircleIcon } from "lucide-react";
+import { Tricycle } from "@/lib/types";
 
 interface TricycleDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  tricycle: any | null;
+  tricycle: Tricycle | null;
   onSuccess: () => void;
 }
 
@@ -30,7 +32,7 @@ export function TricycleDialog({
   tricycle,
   onSuccess,
 }: TricycleDialogProps) {
-  const { createTricycle, updateTricycle } = useUsers();
+  const { createTricycle, updateTricycle, tricycles } = useAgents();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     plaque_immatriculation: "",
@@ -51,13 +53,22 @@ export function TricycleDialog({
     }
   }, [tricycle, open]);
 
-  const validateForm = () => {
+  const validateForm = (): boolean => {
     const newErrors: { plaque_immatriculation?: string } = {};
     
     if (!formData.plaque_immatriculation.trim()) {
       newErrors.plaque_immatriculation = "La plaque d'immatriculation est requise";
     } else if (formData.plaque_immatriculation.length < 3) {
       newErrors.plaque_immatriculation = "La plaque est trop courte";
+    } else {
+      // Vérifier si la plaque existe déjà (sauf pour l'édition du même tricycle)
+      const existingPlaque = tricycles?.some((t) => 
+        t.plaque_immatriculation.toLowerCase() === formData.plaque_immatriculation.toLowerCase() &&
+        (!tricycle || t.id !== tricycle.id)
+      );
+      if (existingPlaque) {
+        newErrors.plaque_immatriculation = "Cette plaque existe déjà";
+      }
     }
     
     setErrors(newErrors);
@@ -74,26 +85,31 @@ export function TricycleDialog({
     setLoading(true);
     try {
       if (tricycle) {
-        await updateTricycle(tricycle.id, formData.plaque_immatriculation);
+        await updateTricycle(tricycle.id, {
+          plaque_immatriculation: formData.plaque_immatriculation.trim().toUpperCase(),
+        });
       } else {
-        await createTricycle(formData.plaque_immatriculation);
+        await createTricycle({
+          plaque_immatriculation: formData.plaque_immatriculation.trim().toUpperCase(),
+        });
       }
       
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error.message || "Une erreur est survenue lors de l'enregistrement");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Une erreur est survenue lors de l'enregistrement";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatPlaque = (value: string) => {
-    // Formatage automatique de la plaque (ex: AB123CD)
+  const formatPlaque = (value: string): string => {
+    // Formatage automatique de la plaque (ex: AB-123-CD)
     let formatted = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     
-    // Si la plaque est assez longue, on peut ajouter un séparateur
-    if (formatted.length > 3) {
+    // Ajouter des séparateurs pour une meilleure lisibilité
+    if (formatted.length > 2) {
       formatted = formatted.substring(0, 2) + '-' + formatted.substring(2);
     }
     if (formatted.length > 6) {
@@ -113,59 +129,84 @@ export function TricycleDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <BikeIcon className="h-5 w-5" />
-            <DialogTitle>
-              {tricycle ? "Modifier le tricycle" : "Ajouter un nouveau tricycle"}
-            </DialogTitle>
+            <div className="p-2 rounded-full bg-primary/10">
+              <BikeIcon className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <DialogTitle>
+                {tricycle ? "Modifier le tricycle" : "Ajouter un nouveau tricycle"}
+              </DialogTitle>
+              <DialogDescription>
+                {tricycle
+                  ? "Modifiez les informations du tricycle ci-dessous."
+                  : "Renseignez les informations pour ajouter un nouveau tricycle à la flotte."}
+              </DialogDescription>
+            </div>
           </div>
-          <DialogDescription>
-            {tricycle
-              ? "Modifiez les informations du tricycle ci-dessous."
-              : "Renseignez les informations pour ajouter un nouveau tricycle à la flotte."}
-          </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="plaque_immatriculation">
-                Plaque d&apos;immatriculation *
+              <Label htmlFor="plaque_immatriculation" className="flex items-center gap-2">
+                Plaque d&apos;immatriculation
+                <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="plaque_immatriculation"
-                name="plaque_immatriculation"
-                value={formData.plaque_immatriculation}
-                onChange={handlePlaqueChange}
-                placeholder="Ex: AB-123-CD"
-                className={errors.plaque_immatriculation ? "border-red-500" : ""}
-                maxLength={20}
-              />
+              <div className="relative">
+                <Input
+                  id="plaque_immatriculation"
+                  name="plaque_immatriculation"
+                  value={formData.plaque_immatriculation}
+                  onChange={handlePlaqueChange}
+                  placeholder="Ex: AB-123-CD"
+                  className={errors.plaque_immatriculation ? "border-destructive pr-10" : "pr-10"}
+                  maxLength={20}
+                  autoFocus
+                />
+                {!errors.plaque_immatriculation && formData.plaque_immatriculation && (
+                  <CheckIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+              </div>
               {errors.plaque_immatriculation && (
-                <p className="text-sm text-red-500">{errors.plaque_immatriculation}</p>
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircleIcon className="h-3 w-3" />
+                  {errors.plaque_immatriculation}
+                </p>
               )}
               <p className="text-sm text-muted-foreground">
-                Format recommandé : Lettres et chiffres (ex: AB123CD)
+                Format recommandé : Lettres et chiffres (ex: AB-123-CD)
               </p>
             </div>
 
             {tricycle && (
-              <div className="space-y-2">
-                <Label>Informations supplémentaires</Label>
+              <div className="rounded-lg border p-4 space-y-3">
+                <h4 className="font-medium">Informations du tricycle</h4>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="space-y-1">
                     <div className="text-muted-foreground">ID</div>
-                    <div className="font-medium">#{tricycle.id}</div>
+                    <div className="font-mono font-medium">#{tricycle.id}</div>
                   </div>
                   <div className="space-y-1">
                     <div className="text-muted-foreground">Créé le</div>
                     <div className="font-medium">
-                      {new Date(tricycle.created_at).toLocaleDateString('fr-FR')}
+                      {new Date(tricycle.created_at).toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: 'long',
+                        year: 'numeric'
+                      })}
                     </div>
                   </div>
                 </div>
               </div>
             )}
           </div>
+          
+          <Alert>
+            <AlertCircleIcon className="h-4 w-4" />
+            <AlertDescription>
+              La plaque d&apos;immatriculation doit être unique et sera utilisée pour identifier le tricycle.
+            </AlertDescription>
+          </Alert>
           
           <DialogFooter>
             <Button
@@ -177,8 +218,16 @@ export function TricycleDialog({
               Annuler
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
-              {tricycle ? "Mettre à jour" : "Créer le tricycle"}
+              {loading ? (
+                <>
+                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                  {tricycle ? "Mise à jour..." : "Création..."}
+                </>
+              ) : (
+                <>
+                  {tricycle ? "Mettre à jour" : "Créer le tricycle"}
+                </>
+              )}
             </Button>
           </DialogFooter>
         </form>

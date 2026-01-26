@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useUsers } from "@/lib/hooks/useUsers";
+import { useAgents } from "@/lib/hooks/useAgents";
 import {
   Dialog,
   DialogContent,
@@ -11,14 +11,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { AlertTriangleIcon, Loader2Icon, AlertCircleIcon } from "lucide-react";
-import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertTriangleIcon,
+  Loader2Icon,
+  AlertCircleIcon,
+  BikeIcon,
+  CalendarIcon,
+  HashIcon,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Tricycle } from "@/lib/types";
 
 interface TricycleDeleteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  tricycle: any | null;
+  tricycle: Tricycle | null;
   onSuccess: () => void;
 }
 
@@ -28,20 +37,28 @@ export function TricycleDeleteDialog({
   tricycle,
   onSuccess,
 }: TricycleDeleteDialogProps) {
-  const { deleteTricycle } = useUsers();
+  const { deleteTricycle } = useAgents();
   const [loading, setLoading] = useState(false);
+  const [confirmationText, setConfirmationText] = useState("");
   const [isAssigned, setIsAssigned] = useState(false);
 
   const handleDelete = async () => {
     if (!tricycle) return;
+    
+    if (confirmationText !== tricycle.plaque_immatriculation) {
+      toast.error("Veuillez taper exactement la plaque d'immatriculation pour confirmer");
+      return;
+    }
     
     setLoading(true);
     try {
       await deleteTricycle(tricycle.id);
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de la suppression");
+      setConfirmationText("");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Erreur lors de la suppression";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -49,66 +66,108 @@ export function TricycleDeleteDialog({
 
   if (!tricycle) return null;
 
-  // Dans une implémentation réelle, vérifiez si le tricycle est assigné
-  // const checkIfAssigned = async () => {
-  //   // Vérifiez si des agents utilisent ce tricycle
-  //   // setIsAssigned(result);
-  // };
+  const formatDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <AlertTriangleIcon className="h-5 w-5 text-red-500" />
-            <DialogTitle>Supprimer le tricycle</DialogTitle>
+            <div className="p-2 rounded-full bg-destructive/10">
+              <AlertTriangleIcon className="h-5 w-5 text-destructive" />
+            </div>
+            <div>
+              <DialogTitle className="text-destructive">Supprimer le tricycle</DialogTitle>
+              <DialogDescription>
+                Cette action est irréversible. Le tricycle sera définitivement supprimé.
+              </DialogDescription>
+            </div>
           </div>
-          <DialogDescription>
-            Cette action est irréversible. Le tricycle sera définitivement supprimé.
-          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-6 py-4">
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-            <div className="font-mono font-semibold text-lg">
-              {tricycle.plaque_immatriculation}
+          {/* Tricycle Info */}
+          <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-muted">
+                  <BikeIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="font-mono font-bold text-lg">
+                    {tricycle.plaque_immatriculation}
+                  </div>
+                  <div className="text-sm text-muted-foreground flex items-center gap-2">
+                    <HashIcon className="h-3 w-3" />
+                    ID: #{tricycle.id}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="text-sm text-muted-foreground">
-              ID: #{tricycle.id} • Créé le {new Date(tricycle.created_at).toLocaleDateString('fr-FR')}
+            
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="space-y-1">
+                <div className="text-muted-foreground flex items-center gap-1">
+                  <CalendarIcon className="h-3 w-3" />
+                  Créé le
+                </div>
+                <div className="font-medium">{formatDate(tricycle.created_at)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-muted-foreground">Dernière mise à jour</div>
+                <div className="font-medium">
+                  {tricycle.updated_at ? formatDate(tricycle.updated_at) : "-"}
+                </div>
+              </div>
             </div>
           </div>
           
+          {/* Warning Alerts */}
           {isAssigned ? (
             <Alert variant="destructive">
               <AlertCircleIcon className="h-4 w-4" />
-              <AlertDescription>
-                Ce tricycle est actuellement assigné à un agent. Veuillez d'abord le désassigner avant de le supprimer.
+              <AlertDescription className="font-medium">
+                Ce tricycle est actuellement assigné à un agent. Veuillez d&apos;abord le désassigner avant de le supprimer.
               </AlertDescription>
             </Alert>
           ) : (
-            <Alert>
+            <Alert variant="destructive">
               <AlertCircleIcon className="h-4 w-4" />
               <AlertDescription>
-                La suppression d'un tricycle affectera tous les agents qui y sont associés.
-                Assurez-vous qu'aucun agent n'utilise actuellement ce tricycle.
+                <div className="font-medium mb-1">Attention : Action irréversible</div>
+                La suppression d&apos;un tricycle affectera tous les agents qui y sont associés.
+                Assurez-vous qu&apos;aucun agent n&apos;utilise actuellement ce tricycle.
               </AlertDescription>
             </Alert>
           )}
           
-          <div className="text-sm text-muted-foreground">
-            <p className="font-medium text-destructive">
-              Confirmez la suppression :
-            </p>
-            <p className="mt-2">
-              Tapez <span className="font-mono font-bold">{tricycle.plaque_immatriculation}</span> pour confirmer
-            </p>
+          {/* Confirmation */}
+          <div className="space-y-3">
+            <div className="text-sm">
+              <p className="font-medium text-destructive mb-2">
+                Confirmez la suppression :
+              </p>
+              <p className="text-muted-foreground">
+                Tapez <span className="font-mono font-bold bg-muted px-2 py-1 rounded">
+                  {tricycle.plaque_immatriculation}
+                </span> pour confirmer
+              </p>
+            </div>
             <Input
               id="confirm-delete"
               placeholder={`Saisir "${tricycle.plaque_immatriculation}"`}
-              className="mt-2"
-              onChange={(e) => {
-                // Vous pouvez ajouter une validation de confirmation ici
-              }}
+              value={confirmationText}
+              onChange={(e) => setConfirmationText(e.target.value)}
+              className={confirmationText === tricycle.plaque_immatriculation ? "border-green-500" : ""}
+              disabled={isAssigned}
             />
           </div>
         </div>
@@ -117,7 +176,10 @@ export function TricycleDeleteDialog({
           <Button
             type="button"
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              onOpenChange(false);
+              setConfirmationText("");
+            }}
             disabled={loading}
           >
             Annuler
@@ -126,10 +188,16 @@ export function TricycleDeleteDialog({
             type="button"
             variant="destructive"
             onClick={handleDelete}
-            disabled={loading || isAssigned}
+            disabled={loading || isAssigned || confirmationText !== tricycle.plaque_immatriculation}
           >
-            {loading && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
-            Supprimer définitivement
+            {loading ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Suppression...
+              </>
+            ) : (
+              "Supprimer définitivement"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

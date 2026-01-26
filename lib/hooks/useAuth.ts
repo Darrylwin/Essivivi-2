@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 /**
  * =====================================================
  * Hook - Authentification Admin
@@ -16,9 +15,7 @@ import { authApi, apiClient } from "../api";
 import type { 
   Admin, 
   AdminLoginRequest, 
-  AdminAuthResponse,
   AuthState,
-  AccountInfoResponse,
   ChangePasswordRequest,
   ChangePasswordResponse,
   UpdatePhotoResponse

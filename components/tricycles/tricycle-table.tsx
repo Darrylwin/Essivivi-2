@@ -29,7 +29,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -41,16 +40,21 @@ import {
   BikeIcon,
   CalendarIcon,
   HashIcon,
+  EyeIcon,
+  UserIcon,
+  ArrowUpDownIcon,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tricycle } from "@/lib/types";
 
 interface TricycleTableProps {
-  tricycles: any[];
+  tricycles: Tricycle[];
   loading: boolean;
-  onEdit: (tricycle: any) => void;
-  onDelete: (tricycle: any) => void;
+  onEdit: (tricycle: Tricycle) => void;
+  onDelete: (tricycle: Tricycle) => void;
 }
 
 export function TricycleTable({
@@ -59,60 +63,105 @@ export function TricycleTable({
   onEdit,
   onDelete,
 }: TricycleTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: "created_at", desc: true }
+  ]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [rowSelection, setRowSelection] = useState({});
 
-  const columns: ColumnDef<any>[] = [
+  const columns: ColumnDef<Tricycle>[] = [
     {
       accessorKey: "plaque_immatriculation",
-      header: "Plaque d'immatriculation",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="font-semibold hover:bg-transparent"
+          >
+            Plaque
+            <ArrowUpDownIcon className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <BikeIcon className="h-4 w-4 text-muted-foreground" />
-          <span className="font-mono font-semibold">{row.getValue("plaque_immatriculation")}</span>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "id",
-      header: "ID",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <HashIcon className="h-3 w-3" />
-          <span className="text-sm text-muted-foreground">#{row.getValue("id")}</span>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <BikeIcon className="h-4 w-4 text-primary" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-mono font-semibold">
+              {row.getValue("plaque_immatriculation")}
+            </span>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <HashIcon className="h-3 w-3" />
+              #{row.original.id}
+            </div>
+          </div>
         </div>
       ),
     },
     {
       accessorKey: "created_at",
-      header: "Date de création",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="font-semibold hover:bg-transparent"
+          >
+            Date de création
+            <ArrowUpDownIcon className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
       cell: ({ row }) => {
         const date = new Date(row.getValue("created_at"));
         return (
           <div className="flex items-center gap-2">
-            <CalendarIcon className="h-3 w-3" />
-            <span className="text-sm">
-              {format(date, "dd MMM yyyy", { locale: fr })}
-            </span>
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">
+                {format(date, "dd MMM yyyy", { locale: fr })}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {format(date, "HH:mm", { locale: fr })}
+              </span>
+            </div>
           </div>
         );
       },
     },
     {
       accessorKey: "updated_at",
-      header: "Dernière mise à jour",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="font-semibold hover:bg-transparent"
+          >
+            Dernière mise à jour
+            <ArrowUpDownIcon className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
       cell: ({ row }) => {
-        const date = row.getValue("updated_at") 
-          ? new Date(row.getValue("updated_at"))
+        const date = row.original.updated_at 
+          ? new Date(row.original.updated_at)
           : null;
         return (
           <div className="flex items-center gap-2">
-            <CalendarIcon className="h-3 w-3" />
-            <span className="text-sm">
-              {date ? format(date, "dd MMM yyyy", { locale: fr }) : "-"}
-            </span>
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">
+                {date ? format(date, "dd MMM yyyy", { locale: fr }) : "-"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {date ? format(date, "HH:mm", { locale: fr }) : "Jamais modifié"}
+              </span>
+            </div>
           </div>
         );
       },
@@ -121,11 +170,23 @@ export function TricycleTable({
       id: "status",
       header: "Statut",
       cell: ({ row }) => {
-        // Dans une implémentation réelle, vous auriez besoin de vérifier si le tricycle est assigné
         const isAssigned = false; // À implémenter
         return (
-          <Badge variant={isAssigned ? "default" : "outline"}>
-            {isAssigned ? "Assigné" : "Disponible"}
+          <Badge 
+            variant={isAssigned ? "default" : "outline"} 
+            className={isAssigned ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}
+          >
+            {isAssigned ? (
+              <div className="flex items-center gap-1">
+                <UserIcon className="h-3 w-3" />
+                Assigné
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <BikeIcon className="h-3 w-3" />
+                Disponible
+              </div>
+            )}
           </Badge>
         );
       },
@@ -144,16 +205,21 @@ export function TricycleTable({
                 <MoreVerticalIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onEdit(tricycle)}>
                 <EditIcon className="mr-2 h-4 w-4" />
                 Modifier
               </DropdownMenuItem>
+              <DropdownMenuItem className="text-muted-foreground">
+                <EyeIcon className="mr-2 h-4 w-4" />
+                Voir les détails
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => onDelete(tricycle)}
-                className="text-red-600 focus:text-red-600"
+                className="text-destructive focus:text-destructive"
               >
                 <Trash2Icon className="mr-2 h-4 w-4" />
                 Supprimer
@@ -182,23 +248,40 @@ export function TricycleTable({
       globalFilter,
       rowSelection,
     },
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
   });
 
   if (loading && tricycles.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-muted-foreground">Chargement des tricycles...</div>
+      <div className="space-y-3">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
+            <Skeleton className="h-10 w-10 rounded-lg" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="h-6 w-20" />
+            <Skeleton className="h-8 w-8 rounded-full" />
+          </div>
+        ))}
       </div>
     );
   }
 
   if (!loading && tricycles.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-8">
-        <BikeIcon className="h-12 w-12 text-muted-foreground mb-4" />
+      <div className="flex flex-col items-center justify-center p-12 text-center">
+        <div className="p-4 rounded-full bg-muted mb-4">
+          <BikeIcon className="h-12 w-12 text-muted-foreground" />
+        </div>
         <h3 className="text-lg font-semibold mb-2">Aucun tricycle trouvé</h3>
-        <p className="text-muted-foreground text-center mb-4">
-          Commencez par créer votre premier tricycle pour gérer votre flotte.
+        <p className="text-muted-foreground max-w-md">
+          Aucun tricycle ne correspond à vos critères de recherche.
         </p>
       </div>
     );
@@ -206,40 +289,14 @@ export function TricycleTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between p-4">
-        <Input
-          placeholder="Filtrer les tricycles..."
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="max-w-sm"
-        />
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronRightIcon className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      
-      <div className="border rounded-md">
+      {/* Table */}
+      <div className="rounded-md border overflow-hidden">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-muted/50">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} className="h-12">
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -257,9 +314,10 @@ export function TricycleTable({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className="hover:bg-muted/50 transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-3">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -282,47 +340,60 @@ export function TricycleTable({
         </Table>
       </div>
       
-      <div className="flex items-center justify-between px-2">
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          {table.getFilteredRowModel().rows.length} tricycle(s)
+          {table.getFilteredRowModel().rows.length} tricycle(s) au total
         </div>
         <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronsLeftIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-          </Button>
-          <span className="text-sm">
-            Page {table.getState().pagination.pageIndex + 1} sur{" "}
-            {table.getPageCount()}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronRightIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronsRightIcon className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.setPageIndex(0)}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronsLeftIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronLeftIcon className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-1 text-sm">
+              <span>Page</span>
+              <span className="font-semibold">
+                {table.getState().pagination.pageIndex + 1}
+              </span>
+              <span>sur</span>
+              <span className="font-semibold">
+                {table.getPageCount()}
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              <ChevronRightIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+              disabled={!table.getCanNextPage()}
+            >
+              <ChevronsRightIcon className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>

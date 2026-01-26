@@ -9,6 +9,10 @@
  */
 
 export { useAuth } from "./useAuth";
-export { useUsers } from "./useUsers";
-export { useOrders } from "./useOrders";
+export { useAgents } from "./useAgents";
+export { useClients } from "./useClients";
+export { useCategories } from "./useCategories";
 export { useProducts } from "./useProducts";
+export { useOrders } from "./useOrders";
+export { useToursDeliveries } from "./useToursDeliveries";
+export { useTrackingDashboard } from "./useTrackingDashboard";
