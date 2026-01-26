@@ -32,11 +32,13 @@ import {
   CheckIcon,
   BuildingIcon,
   PackageIcon,
+  EyeIcon,
+  EyeOffIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
-import type { ClientListItem, TypeClient, StatutClient, ClientCreateRequest, ClientUpdateRequest } from "@/lib/types";
+import type { ClientListItem, TypeClient, StatutClient, ClientCreateRequest } from "@/lib/types";
 
 interface ClientDialogProps {
   open: boolean;
@@ -62,11 +64,13 @@ export function ClientDialog({
     latitude: undefined,
     longitude: undefined,
     type_client: "detaillant",
+    mot_de_passe: "", // ← Ajouté
   });
   const [statut, setStatut] = useState<StatutClient>("actif");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showPassword, setShowPassword] = useState(false); // ← Pour afficher/cacher le mot de passe
 
   useEffect(() => {
     if (client && open) {
@@ -79,6 +83,7 @@ export function ClientDialog({
         latitude: undefined,
         longitude: undefined,
         type_client: client.type_client,
+        mot_de_passe: "", // ← Vide pour l'édition
       });
       setStatut(client.statut);
       setPhotoPreview(null);
@@ -93,6 +98,7 @@ export function ClientDialog({
         latitude: undefined,
         longitude: undefined,
         type_client: "detaillant",
+        mot_de_passe: "", // ← Vide par défaut
       });
       setStatut("actif");
       setPhoto(null);
@@ -111,6 +117,12 @@ export function ClientDialog({
     else if (!/^\S+@\S+\.\S+$/.test(formData.email)) newErrors.email = "Email invalide";
     if (!formData.adresse?.trim()) newErrors.adresse = "L'adresse est requise";
     if (!formData.type_client) newErrors.type_client = "Le type de client est requis";
+    
+    // Validation du mot de passe seulement pour la création
+    if (!client) {
+      if (!formData.mot_de_passe?.trim()) newErrors.mot_de_passe = "Le mot de passe est requis";
+      else if (formData.mot_de_passe.length < 6) newErrors.mot_de_passe = "Le mot de passe doit contenir au moins 6 caractères";
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -148,10 +160,11 @@ export function ClientDialog({
       if (client) {
         // Pour la mise à jour, inclure le statut
         apiData.statut = statut;
+        // Ne pas inclure le mot de passe pour la mise à jour
         await updateClient(client.id, apiData);
       } else {
         // Pour la création, inclure le mot de passe
-        apiData.mot_de_passe = "DefaultPassword123!"; // À remplacer par génération aléatoire
+        apiData.mot_de_passe = formData.mot_de_passe; // ← Mot de passe saisi par l'utilisateur
         await createClient(apiData as ClientCreateRequest);
       }
       
@@ -359,6 +372,48 @@ export function ClientDialog({
               )}
             </div>
 
+            {/* Mot de passe (uniquement pour la création) */}
+            {!client && (
+              <div className="space-y-2">
+                <Label htmlFor="mot_de_passe" className="flex items-center gap-2">
+                  Mot de passe temporaire
+                  <span className="text-destructive">*</span>
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="mot_de_passe"
+                    type={showPassword ? "text" : "password"}
+                    value={formData.mot_de_passe || ""}
+                    onChange={(e) => setFormData({ ...formData, mot_de_passe: e.target.value })}
+                    placeholder="Saisir un mot de passe temporaire"
+                    className={errors.mot_de_passe ? "border-destructive pr-10" : "pr-10"}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOffIcon className="h-4 w-4" />
+                    ) : (
+                      <EyeIcon className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                {errors.mot_de_passe && (
+                  <p className="text-sm text-destructive flex items-center gap-1">
+                    <AlertCircleIcon className="h-3 w-3" />
+                    {errors.mot_de_passe}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Le client devra changer ce mot de passe à sa première connexion.
+                </p>
+              </div>
+            )}
+
             {/* Type client */}
             <div className="space-y-2">
               <Label htmlFor="type_client" className="flex items-center gap-2">
@@ -476,11 +531,11 @@ export function ClientDialog({
             </div>
           </div>
           
-          {!client && (
+          {client && (
             <Alert>
               <AlertCircleIcon className="h-4 w-4" />
               <AlertDescription>
-                Un mot de passe temporaire sera généré automatiquement et envoyé au client par email.
+                Pour changer le mot de passe, utilisez la fonctionnalité dédiée dans le profil du client.
               </AlertDescription>
             </Alert>
           )}

@@ -31,6 +31,8 @@ import {
   CameraIcon,
   BikeIcon,
   CheckIcon,
+  EyeIcon,
+  EyeOffIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -60,11 +62,13 @@ export function AgentDialog({
     date_naissance: "",
     adresse: "",
     tricycle_id: null,
+    mot_de_passe: "",
   });
   const [statut, setStatut] = useState<StatutAgent>("actif");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showPassword, setShowPassword] = useState(false); // ← Pour afficher/cacher le mot de passe
 
   useEffect(() => {
     if (agent && open) {
@@ -75,7 +79,8 @@ export function AgentDialog({
         email: agent.email || "",
         date_naissance: agent.date_naissance || "",
         adresse: agent.adresse || "",
-        tricycle_id: null, // À récupérer depuis l'agent complet si disponible
+        tricycle_id: null,
+        mot_de_passe: "", // ← Vide pour l'édition
       });
       if ('statut' in agent) {
         setStatut(agent.statut);
@@ -91,6 +96,7 @@ export function AgentDialog({
         date_naissance: "",
         adresse: "",
         tricycle_id: null,
+        mot_de_passe: "",
       });
       setStatut("actif");
       setPhoto(null);
@@ -110,6 +116,12 @@ export function AgentDialog({
     if (!formData.date_naissance?.trim()) newErrors.date_naissance = "La date de naissance est requise";
     if (!formData.adresse?.trim()) newErrors.adresse = "L'adresse est requise";
     
+    // Validation du mot de passe seulement pour la création
+    if (!agent) {
+      if (!formData.mot_de_passe?.trim()) newErrors.mot_de_passe = "Le mot de passe est requis";
+      else if (formData.mot_de_passe.length < 6) newErrors.mot_de_passe = "Le mot de passe doit contenir au moins 6 caractères";
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -124,6 +136,8 @@ export function AgentDialog({
     setLoading(true);
     try {
       if (agent) {
+        // Pour la mise à jour, on ne modifie pas le mot de passe ici
+        // (prévoir une fonctionnalité séparée pour changer le mot de passe)
         const updateData: AgentUpdateRequest = {
           ...formData,
           statut,
@@ -131,9 +145,10 @@ export function AgentDialog({
         };
         await updateAgent(agent.id, updateData);
       } else {
+        // Pour la création, inclure le mot de passe
         const createData: AgentCreateRequest = {
           ...formData as Required<AgentCreateRequest>,
-          mot_de_passe: "DefaultPassword123!", // À remplacer par génération aléatoire
+          mot_de_passe: formData.mot_de_passe!, // ← Mot de passe saisi par l'utilisateur
           photo: photo || undefined,
         };
         await createAgent(createData);
@@ -366,6 +381,48 @@ export function AgentDialog({
               )}
             </div>
 
+            {/* Mot de passe (uniquement pour la création) */}
+            {!agent && (
+              <div className="space-y-2">
+                <Label htmlFor="mot_de_passe" className="flex items-center gap-2">
+                  Mot de passe temporaire
+                  <span className="text-destructive">*</span>
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="mot_de_passe"
+                    type={showPassword ? "text" : "password"}
+                    value={formData.mot_de_passe || ""}
+                    onChange={(e) => setFormData({ ...formData, mot_de_passe: e.target.value })}
+                    placeholder="Saisir un mot de passe temporaire"
+                    className={errors.mot_de_passe ? "border-destructive pr-10" : "pr-10"}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOffIcon className="h-4 w-4" />
+                    ) : (
+                      <EyeIcon className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                {errors.mot_de_passe && (
+                  <p className="text-sm text-destructive flex items-center gap-1">
+                    <AlertCircleIcon className="h-3 w-3" />
+                    {errors.mot_de_passe}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  L&apos;agent devra changer ce mot de passe à sa première connexion.
+                </p>
+              </div>
+            )}
+
             {/* Statut (pour l'édition seulement) */}
             {agent && (
               <div className="space-y-2">
@@ -436,15 +493,6 @@ export function AgentDialog({
             </div>
           </div>
           
-          {!agent && (
-            <Alert>
-              <AlertCircleIcon className="h-4 w-4" />
-              <AlertDescription>
-                Un mot de passe temporaire sera généré automatiquement et envoyé à l&apos;agent par email.
-              </AlertDescription>
-            </Alert>
-          )}
-          
           {agent && (
             <div className="rounded-lg border p-4 space-y-3">
               <h4 className="font-medium">Informations supplémentaires</h4>
@@ -464,6 +512,12 @@ export function AgentDialog({
                   </div>
                 </div>
               </div>
+              <Alert className="mt-3">
+                <AlertCircleIcon className="h-4 w-4" />
+                <AlertDescription>
+                  Pour changer le mot de passe, utilisez la fonctionnalité dédiée dans le profil de l&apos;agent.
+                </AlertDescription>
+              </Alert>
             </div>
           )}
           

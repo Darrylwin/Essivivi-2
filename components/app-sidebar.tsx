@@ -35,7 +35,7 @@ const data = {
   navMain: [
     {
       title: "Tableau de bord",
-      url: "/dashboard/overvicatetableew",
+      url: "/dashboard/overview",
       icon: Layers,
     },
     {
