@@ -1,8 +1,8 @@
 /**
  * =====================================================
- * API Client - Gestion des Catégories & Produits (Admin)
+ * API Client - Produits
  * =====================================================
- * Client pour les endpoints du catalogue produits
+ * Client pour les endpoints de gestion des produits
  * 
  * @module lib/api/products.api
  * @version 1.0
@@ -10,274 +10,115 @@
 
 import { apiClient } from "./client";
 import type {
-  // Types de base
-  CategorieAvecProduits,
-  CategorieCreateRequest,
-  CategorieUpdateRequest,
-  CategorieAvecProduitsResponse,
-  CategorieDetailResponse,
+  ProduitListResponse,
   ProduitDetail,
   ProduitCreateRequest,
+  ProduitCreateResponse,
   ProduitUpdateRequest,
-  ProduitListResponse,
-  ProduitDetailResponse,
-  SimpleMessageResponse,
-  CategorieQueryParams,
-  ProduitQueryParams,
+  ProduitUpdateResponse,
+  ProduitDeleteResponse,
+  ProduitListParams,
 } from "../types";
 
 export class ProductsApi {
   private client = apiClient;
 
-  // ========== CATÉGORIES ==========
-  
-  /**
-   * Liste toutes les catégories
-   * GET /categories
-   */
-  async getCategories(params?: CategorieQueryParams): Promise<CategorieAvecProduitsResponse> {
-    const queryParams: Record<string, string> = {};
-    
-    if (params?.actif !== undefined) {
-      queryParams.actif = params.actif.toString();
-    }
-    
-    if (params?.avec_produits !== undefined) {
-      queryParams.avec_produits = params.avec_produits.toString();
-    }
-    
-    return this.client.get<CategorieAvecProduitsResponse>("/categories", queryParams);
-  }
-
-  /**
-   * Créer une catégorie
-   * POST /categories
-   */
-  async createCategorie(data: CategorieCreateRequest): Promise<CategorieDetailResponse> {
-    return this.client.post<CategorieDetailResponse>("/categories", data);
-  }
-
-  /**
-   * Détails d'une catégorie
-   * GET /categories/{id}
-   */
-  async getCategorie(id: number): Promise<CategorieAvecProduits> {
-    return this.client.get<CategorieAvecProduits>(`/categories/${id}`);
-  }
-
-  /**
-   * Modifier une catégorie (PUT - modification complète)
-   * PUT /categories/{id}
-   */
-  async updateCategorie(id: number, data: CategorieUpdateRequest): Promise<CategorieDetailResponse> {
-    return this.client.put<CategorieDetailResponse>(
-      `/categories/${id}`,
-      data
-    );
-  }
-
-  /**
-   * Modifier partiellement une catégorie (PATCH)
-   * PATCH /categories/{id}
-   */
-  async patchCategorie(id: number, data: CategorieUpdateRequest): Promise<CategorieDetailResponse> {
-    return this.client.patch<CategorieDetailResponse>(
-      `/categories/${id}`,
-      data
-    );
-  }
-
-  /**
-   * Supprimer une catégorie
-   * DELETE /categories/{id}
-   */
-  async deleteCategorie(id: number): Promise<SimpleMessageResponse> {
-    return this.client.delete<SimpleMessageResponse>(`/categories/${id}`);
-  }
-
-  // ========== PRODUITS ==========
-  
   /**
    * Liste tous les produits
    * GET /produits
    */
-  async getProduits(params?: ProduitQueryParams): Promise<ProduitListResponse> {
-    const queryParams: Record<string, string> = {};
+  async list(params?: ProduitListParams): Promise<ProduitListResponse> {
+    const queryParams: Record<string, string | number | boolean> = {};
     
     if (params?.categorie_id !== undefined) {
-      queryParams.categorie_id = params.categorie_id.toString();
+      queryParams.categorie_id = params.categorie_id;
     }
-    
     if (params?.actif !== undefined) {
-      queryParams.actif = params.actif.toString();
+      queryParams.actif = params.actif;
     }
-    
     if (params?.search) {
       queryParams.search = params.search;
     }
-    
+
     return this.client.get<ProduitListResponse>("/produits", queryParams);
   }
 
   /**
-   * Créer un produit
-   * POST /produits
-   */
-  async createProduit(data: ProduitCreateRequest): Promise<ProduitDetailResponse> {
-    // Pour les uploads avec fichiers, utiliser FormData
-    const formData = new FormData();
-    
-    // Champs obligatoires
-    formData.append("categorie_id", data.categorie_id.toString());
-    formData.append("nom", data.nom);
-    formData.append("marque", data.marque);
-    formData.append("unite_vente", data.unite_vente);
-    formData.append("prix_unitaire", data.prix_unitaire.toString());
-    
-    // Champs optionnels
-    if (data.volume !== undefined) {
-      formData.append("volume", data.volume || "");
-    }
-    
-    if (data.photo) {
-      formData.append("photo", data.photo);
-    }
-    
-    if (data.actif !== undefined) {
-      formData.append("actif", data.actif.toString());
-    }
-    
-    return this.client.post<ProduitDetailResponse>(
-      "/produits",
-      formData,
-      {
-        "Accept": "application/json",
-      }
-    );
-  }
-
-  /**
-   * Détails d'un produit
+   * Récupère les détails d'un produit
    * GET /produits/{id}
    */
-  async getProduit(id: number): Promise<ProduitDetail> {
+  async get(id: number): Promise<ProduitDetail> {
     return this.client.get<ProduitDetail>(`/produits/${id}`);
   }
 
   /**
-   * Modifier un produit (PUT - modification complète)
+   * Crée un nouveau produit
+   * POST /produits
+   * Requiert: Admin uniquement
+   * Content-Type: multipart/form-data si photo fournie
+   */
+  async create(data: ProduitCreateRequest): Promise<ProduitCreateResponse> {
+    const formData = new FormData();
+    
+    formData.append('categorie_id', data.categorie_id.toString());
+    formData.append('nom', data.nom);
+    formData.append('marque', data.marque);
+    if (data.volume) formData.append('volume', data.volume);
+    formData.append('unite_vente', data.unite_vente);
+    formData.append('prix_unitaire', data.prix_unitaire.toString());
+    if (data.photo) formData.append('photo', data.photo);
+    if (data.actif !== undefined) formData.append('actif', data.actif.toString());
+
+    return this.client.post<ProduitCreateResponse>("/produits", formData);
+  }
+
+  /**
+   * Modifie un produit (complet)
    * PUT /produits/{id}
+   * Requiert: Admin uniquement
    */
-  async updateProduit(id: number, data: ProduitUpdateRequest): Promise<ProduitDetailResponse> {
+  async update(id: number, data: ProduitUpdateRequest): Promise<ProduitUpdateResponse> {
     const formData = new FormData();
     
-    // Ajouter seulement les champs fournis
-    if (data.categorie_id !== undefined) {
-      formData.append("categorie_id", data.categorie_id.toString());
-    }
-    
-    if (data.nom) {
-      formData.append("nom", data.nom);
-    }
-    
-    if (data.marque) {
-      formData.append("marque", data.marque);
-    }
-    
-    if (data.unite_vente) {
-      formData.append("unite_vente", data.unite_vente);
-    }
-    
-    if (data.prix_unitaire !== undefined) {
-      formData.append("prix_unitaire", data.prix_unitaire.toString());
-    }
-    
-    if (data.volume !== undefined) {
-      formData.append("volume", data.volume || "");
-    }
-    
-    if (data.actif !== undefined) {
-      formData.append("actif", data.actif.toString());
-    }
-    
-    if (data.photo !== undefined) {
-      if (data.photo) {
-        formData.append("photo", data.photo);
-      } else {
-        // Pour supprimer la photo
-        formData.append("photo", "");
-      }
-    }
-    
-    return this.client.put<ProduitDetailResponse>(
-      `/produits/${id}`,
-      formData,
-      {
-        "Accept": "application/json",
-      }
-    );
+    if (data.categorie_id !== undefined) formData.append('categorie_id', data.categorie_id.toString());
+    if (data.nom) formData.append('nom', data.nom);
+    if (data.marque) formData.append('marque', data.marque);
+    if (data.volume !== undefined) formData.append('volume', data.volume || '');
+    if (data.unite_vente) formData.append('unite_vente', data.unite_vente);
+    if (data.prix_unitaire !== undefined) formData.append('prix_unitaire', data.prix_unitaire.toString());
+    if (data.photo) formData.append('photo', data.photo);
+    if (data.actif !== undefined) formData.append('actif', data.actif.toString());
+
+    return this.client.put<ProduitUpdateResponse>(`/produits/${id}`, formData);
   }
 
   /**
-   * Modifier partiellement un produit (PATCH)
+   * Modifie partiellement un produit
    * PATCH /produits/{id}
+   * Requiert: Admin uniquement
    */
-  async patchProduit(id: number, data: ProduitUpdateRequest): Promise<ProduitDetailResponse> {
+  async patch(id: number, data: Partial<ProduitUpdateRequest>): Promise<ProduitUpdateResponse> {
     const formData = new FormData();
     
-    // Ajouter seulement les champs fournis
-    if (data.categorie_id !== undefined) {
-      formData.append("categorie_id", data.categorie_id.toString());
-    }
-    
-    if (data.nom) {
-      formData.append("nom", data.nom);
-    }
-    
-    if (data.marque) {
-      formData.append("marque", data.marque);
-    }
-    
-    if (data.unite_vente) {
-      formData.append("unite_vente", data.unite_vente);
-    }
-    
-    if (data.prix_unitaire !== undefined) {
-      formData.append("prix_unitaire", data.prix_unitaire.toString());
-    }
-    
-    if (data.volume !== undefined) {
-      formData.append("volume", data.volume || "");
-    }
-    
-    if (data.actif !== undefined) {
-      formData.append("actif", data.actif.toString());
-    }
-    
-    if (data.photo !== undefined) {
-      if (data.photo) {
-        formData.append("photo", data.photo);
-      } else {
-        // Pour supprimer la photo
-        formData.append("photo", "");
-      }
-    }
-    
-    return this.client.patch<ProduitDetailResponse>(
-      `/produits/${id}`,
-      formData,
-      {
-        "Accept": "application/json",
-      }
-    );
+    if (data.categorie_id !== undefined) formData.append('categorie_id', data.categorie_id.toString());
+    if (data.nom) formData.append('nom', data.nom);
+    if (data.marque) formData.append('marque', data.marque);
+    if (data.volume !== undefined) formData.append('volume', data.volume || '');
+    if (data.unite_vente) formData.append('unite_vente', data.unite_vente);
+    if (data.prix_unitaire !== undefined) formData.append('prix_unitaire', data.prix_unitaire.toString());
+    if (data.photo) formData.append('photo', data.photo);
+    if (data.actif !== undefined) formData.append('actif', data.actif.toString());
+
+    return this.client.patch<ProduitUpdateResponse>(`/produits/${id}`, formData);
   }
 
   /**
-   * Supprimer un produit
+   * Supprime un produit
    * DELETE /produits/{id}
+   * Requiert: Admin uniquement
    */
-  async deleteProduit(id: number): Promise<SimpleMessageResponse> {
-    return this.client.delete<SimpleMessageResponse>(`/produits/${id}`);
+  async delete(id: number): Promise<ProduitDeleteResponse> {
+    return this.client.delete<ProduitDeleteResponse>(`/produits/${id}`);
   }
 }
 

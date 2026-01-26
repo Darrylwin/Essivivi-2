@@ -1,9 +1,8 @@
-// orders.api.ts
 /**
  * =====================================================
- * API Client - Commandes (Orders)
+ * API Client - Commandes
  * =====================================================
- * Client pour les endpoints de gestion des commandes (admin web)
+ * Client pour les endpoints de gestion des commandes
  * 
  * @module lib/api/orders.api
  * @version 1.0
@@ -11,120 +10,85 @@
 
 import { apiClient } from "./client";
 import type {
-  CommandeListRequest,
   CommandeListResponse,
-  CommandeDetailResponse,
+  Commande,
   CommandeAssignRequest,
   CommandeAssignResponse,
   CommandeStatusRequest,
   CommandeStatusResponse,
-  CommandeUpdateRequest,
-  CommandeUpdateResponse,
-  NotificationListRequest,
-  NotificationListResponse,
-  NotificationMarkAsReadResponse,
+  AgentsDisponiblesResponse,
+  CommandeListParams,
 } from "../types";
 
 export class OrdersApi {
   private client = apiClient;
 
-  // ==================== COMMANDES ====================
-
   /**
-   * Lister les commandes
+   * Liste toutes les commandes
    * GET /orders
-   * Requiert: Bearer token (admin)
+   * Filtrage automatique selon l'utilisateur
    */
-  async listCommandes(filters?: CommandeListRequest): Promise<CommandeListResponse> {
-    const params: Record<string, string> = {};
+  async list(params?: CommandeListParams): Promise<CommandeListResponse> {
+    const queryParams: Record<string, string | number> = {};
     
-    if (filters?.statut) params.statut = filters.statut;
-    if (filters?.search) params.search = filters.search;
-    if (filters?.agent_id) params.agent_id = String(filters.agent_id);
-    if (filters?.client_id) params.client_id = String(filters.client_id);
-    if (filters?.lat) params.lat = String(filters.lat);
-    if (filters?.lon) params.lon = String(filters.lon);
-    if (filters?.distance_max) params.distance_max = String(filters.distance_max);
+    if (params?.statut) {
+      queryParams.statut = params.statut;
+    }
+    if (params?.agent_id !== undefined) {
+      queryParams.agent_id = params.agent_id;
+    }
+    if (params?.client_id !== undefined) {
+      queryParams.client_id = params.client_id;
+    }
+    if (params?.search) {
+      queryParams.search = params.search;
+    }
 
-    return this.client.get<CommandeListResponse>("/orders", params);
+    return this.client.get<CommandeListResponse>("/orders", queryParams);
   }
 
   /**
-   * Récupérer les détails d'une commande
+   * Récupère les détails d'une commande
    * GET /orders/{id}
-   * Requiert: Bearer token (admin, agent assigné, ou client propriétaire)
    */
-  async getCommande(id: number): Promise<CommandeDetailResponse> {
-    return this.client.get<CommandeDetailResponse>(`/orders/${id}`);
+  async get(id: number): Promise<Commande> {
+    return this.client.get<Commande>(`/orders/${id}`);
   }
 
   /**
-   * Mettre à jour une commande (coordonnées)
-   * PUT /orders/{id}
-   * Requiert: Bearer token (admin ou client si statut en_attente)
-   */
-  async updateCommande(id: number, data: CommandeUpdateRequest): Promise<CommandeUpdateResponse> {
-    return this.client.put<CommandeUpdateResponse>(`/orders/${id}`, data);
-  }
-
-  /**
-   * Mettre à jour partiellement une commande
-   * PATCH /orders/{id}
-   * Requiert: Bearer token (admin ou client si statut en_attente)
-   */
-  async patchCommande(id: number, data: CommandeUpdateRequest): Promise<CommandeUpdateResponse> {
-    return this.client.patch<CommandeUpdateResponse>(`/orders/${id}`, data);
-  }
-
-  /**
-   * Supprimer une commande
-   * DELETE /orders/{id}
-   * Requiert: Bearer token (admin uniquement)
-   */
-  async deleteCommande(id: number): Promise<{ message: string }> {
-    return this.client.delete<{ message: string }>(`/orders/${id}`);
-  }
-
-  /**
-   * Assigner une commande à un agent
+   * Assigne une commande à un agent
    * POST /orders/{id}/assign
-   * Requiert: Bearer token (admin uniquement)
+   * Requiert: Admin uniquement
    */
-  async assignCommande(id: number, data: CommandeAssignRequest): Promise<CommandeAssignResponse> {
+  async assign(id: number, data: CommandeAssignRequest): Promise<CommandeAssignResponse> {
     return this.client.post<CommandeAssignResponse>(`/orders/${id}/assign`, data);
   }
 
   /**
-   * Changer le statut d'une commande
+   * Change le statut d'une commande
    * PATCH /orders/{id}/status
-   * Requiert: Bearer token (admin ou agent assigné)
+   * Requiert: Admin ou Agent assigné
    */
-  async changeCommandeStatus(id: number, data: CommandeStatusRequest): Promise<CommandeStatusResponse> {
+  async updateStatus(id: number, data: CommandeStatusRequest): Promise<CommandeStatusResponse> {
     return this.client.patch<CommandeStatusResponse>(`/orders/${id}/status`, data);
   }
 
-  // ==================== NOTIFICATIONS ====================
-
   /**
-   * Lister les notifications
-   * GET /notifications
-   * Requiert: Bearer token
+   * Supprime une commande
+   * DELETE /orders/{id}
+   * Requiert: Admin uniquement
    */
-  async listNotifications(filters?: NotificationListRequest): Promise<NotificationListResponse> {
-    const params: Record<string, string> = {};
-    
-    if (filters?.lue !== undefined) params.lue = String(filters.lue);
-
-    return this.client.get<NotificationListResponse>("/notifications", params);
+  async delete(id: number): Promise<{ message: string }> {
+    return this.client.delete<{ message: string }>(`/orders/${id}`);
   }
 
   /**
-   * Marquer une notification comme lue
-   * PATCH /notifications/{id}/read
-   * Requiert: Bearer token (propriétaire de la notification)
+   * Liste des agents disponibles pour assignation
+   * GET /orders/available-agents
+   * Requiert: Admin uniquement
    */
-  async markNotificationAsRead(id: number): Promise<NotificationMarkAsReadResponse> {
-    return this.client.patch<NotificationMarkAsReadResponse>(`/notifications/${id}/read`);
+  async getAvailableAgents(): Promise<AgentsDisponiblesResponse> {
+    return this.client.get<AgentsDisponiblesResponse>("/orders/available-agents");
   }
 }
 

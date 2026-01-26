@@ -34,6 +34,11 @@ const data = {
       icon: UsersIcon,
     },
     {
+      title: "Clients",
+      url: "/dashboard/clients",
+      icon: UsersIcon,
+    },
+    {
       title: "Tricycles",
       url: "/dashboard/tricycles",
       icon: TruckIcon,

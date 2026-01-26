@@ -10,6 +10,10 @@
 
 // Auth & Users
 export * from "./auth.types";
-export * from "./users.types";
 export * from "./products.types";
+export * from "./categories.types";
+export * from "./agents.types";
+export * from "./clients.types";
 export * from "./orders.types";
+export * from "./tours-deliveries.types";
+export * from "./tracking-dashboard.types";

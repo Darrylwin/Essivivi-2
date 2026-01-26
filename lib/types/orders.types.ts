@@ -1,7 +1,6 @@
-// orders.types.ts
 /**
  * =====================================================
- * Types - Commandes (Orders)
+ * Types - Commandes
  * =====================================================
  * Définitions TypeScript pour la gestion des commandes
  * 
@@ -9,28 +8,17 @@
  * @version 1.0
  */
 
-// ========== ENUMS ==========
-export type CommandeStatut = 
-  | 'en_attente'
-  | 'acceptee'
-  | 'en_cours'
-  | 'livree'
-  | 'annulee';
+// ========== COMMANDE MODEL ==========
+export type StatutCommande = 'en_attente' | 'acceptee' | 'en_cours' | 'livree' | 'annulee';
 
-export type NotificationType = 
-  | 'nouvelle_commande'
-  | 'livraison_assignee'
-  | 'livraison_terminee'
-  | 'commande_annulee';
-
-// ========== MODELS ==========
 export interface LigneCommande {
   id: number;
   produit: number;
-  produit_detail?: {
+  produit_detail: {
     id: number;
     nom: string;
-    categorie: string;
+    marque: string;
+    volume: string | null;
     prix_unitaire: string;
   };
   quantite: number;
@@ -44,189 +32,96 @@ export interface Commande {
   client: number;
   client_code: string;
   client_nom: string;
-  client_responsable?: string;
-  client_telephone?: string;
-  client_latitude?: string;
-  client_longitude?: string;
-  
-  agent: number | null;
-  agent_numero: string | null;
-  agent_nom: string | null;
-  agent_nom_complet?: string;
-  agent_telephone?: string | null;
-  
-  quantite_demandee: number | null;
-  quantite_totale: number;
-  montant_total: string;
-  
-  latitude_livraison: string;
-  longitude_livraison: string;
-  
-  statut: CommandeStatut;
-  est_assignee: boolean;
-  
-  distance_client_livraison?: number | null;
-  
-  lignes?: LigneCommande[];
-  
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Notification {
-  id: number;
-  type: NotificationType;
-  titre: string;
-  message: string;
-  lue: boolean;
-  
-  agent: number | null;
-  agent_numero: string | null;
-  
-  client: number | null;
-  client_code: string | null;
-  
-  commande: number | null;
-  commande_id: number | null;
-  
-  created_at: string;
-}
-
-// ========== REQUEST/RESPONSE TYPES ==========
-// Liste des commandes
-export interface CommandeListRequest {
-  statut?: CommandeStatut;
-  search?: string;
-  lat?: number;
-  lon?: number;
-  distance_max?: number;
-  agent_id?: number;
-  client_id?: number;
-}
-
-export interface CommandeListResponse {
-  count: number;
-  results: Commande[];
-}
-
-// Détail d'une commande
-export interface CommandeDetailResponse {
-  id: number;
-  client: number;
-  client_code: string;
-  client_nom: string;
   client_responsable: string;
   client_telephone: string;
-  client_latitude: string;
-  client_longitude: string;
-  
+  client_latitude: string | null;
+  client_longitude: string | null;
   agent: number | null;
   agent_numero: string | null;
   agent_nom_complet: string | null;
   agent_telephone: string | null;
-  
   lignes: LigneCommande[];
   quantite_totale: number;
   montant_total: string;
-  
   latitude_livraison: string;
   longitude_livraison: string;
-  
-  statut: CommandeStatut;
+  statut: StatutCommande;
   est_assignee: boolean;
   distance_client_livraison: number | null;
-  
   created_at: string;
   updated_at: string;
 }
 
-// Assignation d'une commande
+// ========== COMMANDE LISTE ==========
+export interface CommandeListItem {
+  id: number;
+  client: number;
+  client_code: string;
+  client_nom: string;
+  agent: number | null;
+  agent_numero: string | null;
+  agent_nom: string | null;
+  est_assignee: boolean;
+  quantite_totale: number;
+  montant_total: string;
+  latitude_livraison: string;
+  longitude_livraison: string;
+  statut: StatutCommande;
+  created_at: string;
+}
+
+// ========== AGENT DISPONIBLE ==========
+export interface AgentDisponible {
+  id: number;
+  numero_identification: string;
+  nom: string;
+  prenom: string;
+  telephone: string;
+  statut: string;
+  tricycle: string | null;
+  derniere_position: {
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+  } | null;
+}
+
+// ========== REQUESTS ==========
 export interface CommandeAssignRequest {
   agent_id: number;
 }
 
-export interface CommandeAssignResponse {
-  message: string;
-  commande: CommandeDetailResponse;
+export interface CommandeStatusRequest {
+  statut: StatutCommande;
 }
 
-// Changement de statut
-export interface CommandeStatusRequest {
-  statut: CommandeStatut;
+// ========== RESPONSES ==========
+export interface CommandeListResponse {
+  count: number;
+  results: CommandeListItem[];
+}
+
+export interface CommandeAssignResponse {
+  message: string;
+  instructions: string;
+  commande: Commande;
 }
 
 export interface CommandeStatusResponse {
   message: string;
-  commande: CommandeDetailResponse;
+  commande: Commande;
 }
 
-// Mise à jour d'une commande (coordonnées)
-export interface CommandeUpdateRequest {
-  latitude_livraison?: string;
-  longitude_livraison?: string;
-}
-
-export interface CommandeUpdateResponse {
-  message: string;
-  commande: CommandeDetailResponse;
-}
-
-// Notifications
-export interface NotificationListRequest {
-  lue?: boolean;
-}
-
-export interface NotificationListResponse {
+export interface AgentsDisponiblesResponse {
   count: number;
-  results: Notification[];
+  agents: AgentDisponible[];
+  note: string;
 }
 
-export interface NotificationMarkAsReadResponse {
-  message: string;
-  notification: Notification;
-}
-
-// ========== FILTERING ==========
-export interface CommandeFilters {
-  statut?: CommandeStatut;
+// ========== QUERY PARAMS ==========
+export interface CommandeListParams {
+  statut?: StatutCommande;
   agent_id?: number;
   client_id?: number;
   search?: string;
-  lat?: number;
-  lon?: number;
-  distance_max?: number;
-}
-
-export interface NotificationFilters {
-  lue?: boolean;
-}
-
-// ======== Ajouts ===============
-export interface CommandeStats {
-  total: number;
-  en_attente: number;
-  acceptee: number;
-  en_cours: number;
-  livree: number;
-  annulee: number;
-  montant_total: string;
-}
-
-export interface Agent {
-  id: number;
-  nom: string;
-  prenom: string;
-  numero_identification: string;
-  telephone: string;
-  statut: 'actif' | 'inactif';
-  email: string;
-}
-
-export interface Client {
-  id: number;
-  nom_point_vente: string;
-  nom_responsable: string;
-  telephone: string;
-  code_client: string;
-  email: string;
 }
