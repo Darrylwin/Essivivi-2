@@ -31,6 +31,7 @@ interface UseToursDeliveriesReturn {
   // Livraisons
   livraisons: LivraisonListResponse | null;
   livraison: Livraison | null;
+  loading: boolean;
   deliveriesLoading: boolean;
   deliveriesError: string | null;
 
@@ -40,6 +41,7 @@ interface UseToursDeliveriesReturn {
 
   // Livraison Methods
   fetchLivraisons: (params?: LivraisonListParams) => Promise<void>;
+  fetchLivraisonsByCommande: (commandeId: number) => Promise<void>;
   fetchLivraison: (id: number) => Promise<void>;
   deleteLivraison: (id: number) => Promise<{ message: string }>;
 
@@ -101,6 +103,22 @@ export function useToursDeliveries(): UseToursDeliveriesReturn {
       setLivraisons(response);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to fetch deliveries";
+      setDeliveriesError(errorMessage);
+      throw err;
+    } finally {
+      setDeliveriesLoading(false);
+    }
+  }, []);
+
+  const fetchLivraisonsByCommande = useCallback(async (commandeId: number): Promise<void> => {
+    setDeliveriesLoading(true);
+    setDeliveriesError(null);
+    
+    try {
+      const response = await deliveriesApi.list({ commande_id: commandeId });
+      setLivraisons(response);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch deliveries for order";
       setDeliveriesError(errorMessage);
       throw err;
     } finally {
@@ -179,6 +197,7 @@ export function useToursDeliveries(): UseToursDeliveriesReturn {
     // Livraisons
     livraisons,
     livraison,
+    loading: deliveriesLoading,
     deliveriesLoading,
     deliveriesError,
 
@@ -188,6 +207,7 @@ export function useToursDeliveries(): UseToursDeliveriesReturn {
 
     // Livraison Methods
     fetchLivraisons,
+    fetchLivraisonsByCommande,
     fetchLivraison,
     deleteLivraison,
 

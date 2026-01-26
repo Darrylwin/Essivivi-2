@@ -26,12 +26,14 @@ import type {
 interface UseOrdersReturn {
   commandes: CommandeListResponse | null;
   commande: Commande | null;
+  commandeDetails: Commande | null;
   availableAgents: AgentsDisponiblesResponse | null;
   loading: boolean;
   error: string | null;
 
   fetchCommandes: (params?: CommandeListParams) => Promise<void>;
   fetchCommande: (id: number) => Promise<void>;
+  fetchCommandeDetails: (id: number) => Promise<void>;
   assignCommande: (id: number, data: CommandeAssignRequest) => Promise<CommandeAssignResponse>;
   updateStatus: (id: number, data: CommandeStatusRequest) => Promise<CommandeStatusResponse>;
   deleteCommande: (id: number) => Promise<{ message: string }>;
@@ -80,6 +82,22 @@ export function useOrders(): UseOrdersReturn {
     }
   }, []);
 
+  const fetchCommandeDetails = useCallback(async (id: number): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await ordersApi.get(id);
+      setCommande(response);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch order details";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const assignCommande = useCallback(async (id: number, data: CommandeAssignRequest): Promise<CommandeAssignResponse> => {
     setLoading(true);
     setError(null);
@@ -103,8 +121,8 @@ export function useOrders(): UseOrdersReturn {
               item.id === id ? {
                 ...item,
                 agent: data.agent_id,
-                agent_numero: response.commande.agent_numero,
-                agent_nom: response.commande.agent_nom_complet,
+                agent_numero: response.commande.agent_numero ?? null,
+                agent_nom: response.commande.agent_nom_complet ?? null,
                 est_assignee: true,
               } : item
             )
@@ -219,12 +237,14 @@ export function useOrders(): UseOrdersReturn {
   return {
     commandes,
     commande,
+    commandeDetails: commande, // Alias pour la compatibilité
     availableAgents,
     loading,
     error,
 
     fetchCommandes,
     fetchCommande,
+    fetchCommandeDetails,
     assignCommande,
     updateStatus,
     deleteCommande,

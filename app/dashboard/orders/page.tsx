@@ -1,47 +1,44 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { OrderTable } from "@/components/orders/order-table";
-import { OrderAssignDialog } from "@/components/orders/order-assign-dialog";
-import { OrderDeleteDialog } from "@/components/orders/order-delete-dialog";
-import { useOrders } from "@/lib/hooks/useOrders";
+import { useRouter } from "next/navigation";
+import { useToursDeliveries } from "@/lib/hooks/useToursDeliveries";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   SearchIcon,
   RefreshCwIcon,
-  PackageIcon,
-  ClockIcon,
-  CheckCircleIcon,
   TruckIcon,
+  CheckCircleIcon,
+  ClockIcon,
   XCircleIcon,
   AlertCircleIcon,
   FilterIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { CommandeListItem, StatutCommande } from "@/lib/types";
+import { DeliveryTable } from "@/components/deliveries/delivery-table";
+import { DeliveryDetailDialog } from "@/components/deliveries/delivery-detail-dialog";
+import type { LivraisonListItem, StatutLivraison } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useRouter } from "next/navigation";
 
-export default function OrdersPage() {
+export default function DeliveriesPage() {
   const router = useRouter();
   const {
-    commandes,
-    loading,
-    error,
-    fetchCommandes,
-    clearError,
-  } = useOrders();
+    livraisons,
+    deliveriesLoading: loading,
+    deliveriesError: error,
+    fetchLivraisons,
+    clearErrors,
+  } = useToursDeliveries();
 
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<CommandeListItem | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [selectedDelivery, setSelectedDelivery] = useState<LivraisonListItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatutCommande | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<StatutLivraison | "all">("all");
 
   useEffect(() => {
     fetchData();
@@ -50,57 +47,40 @@ export default function OrdersPage() {
 
   const fetchData = async () => {
     try {
-      await fetchCommandes();
-      toast.success("Liste des commandes actualisée");
+      await fetchLivraisons();
     } catch (err) {
-      toast.error("Erreur lors du chargement des commandes");
+      toast.error("Erreur lors du chargement des livraisons");
     }
   };
 
-  const handleAssign = (orderItem: CommandeListItem) => {
-    setSelectedOrder(orderItem);
-    setAssignDialogOpen(true);
+  const handleViewDetails = (delivery: LivraisonListItem) => {
+    setSelectedDelivery(delivery);
+    setDetailDialogOpen(true);
   };
 
-  const handleDelete = (orderItem: CommandeListItem) => {
-    setSelectedOrder(orderItem);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleViewDetails = (orderItem: CommandeListItem) => {
-    router.push(`/dashboard/orders/${orderItem.id}`);
-  };
-
-  const handleOrderAssigned = () => {
-    setAssignDialogOpen(false);
+  const handleDialogClose = () => {
+    setDetailDialogOpen(false);
     fetchData();
-    toast.success("Commande assignée avec succès");
   };
 
-  const handleOrderDeleted = () => {
-    setDeleteDialogOpen(false);
-    fetchData();
-    toast.success("Commande supprimée avec succès");
-  };
-
-  const safeOrders = commandes?.results && Array.isArray(commandes.results) ? commandes.results : [];
+  const safeDeliveries = livraisons?.results && Array.isArray(livraisons.results) ? livraisons.results : [];
   
-  const filteredOrders = safeOrders.filter((orderItem) => {
+  const filteredDeliveries = safeDeliveries.filter((delivery) => {
     const matchesSearch = searchQuery === "" || 
-      orderItem.client_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      orderItem.client_nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      orderItem.agent_nom?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      orderItem.agent_numero?.toLowerCase().includes(searchQuery.toLowerCase());
+      delivery.client_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      delivery.client_nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      delivery.agent_nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      delivery.agent_numero.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesStatus = statusFilter === "all" || orderItem.statut === statusFilter;
+    const matchesStatus = statusFilter === "all" || delivery.statut === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
 
-  const enAttenteCount = safeOrders.filter(o => o.statut === 'en_attente').length;
-  const accepteeCount = safeOrders.filter(o => o.statut === 'acceptee').length;
-  const enCoursCount = safeOrders.filter(o => o.statut === 'en_cours').length;
-  const livreeCount = safeOrders.filter(o => o.statut === 'livree').length;
+  const enAttenteCount = safeDeliveries.filter(d => d.statut === 'en_attente').length;
+  const valideeCount = safeDeliveries.filter(d => d.statut === 'validee').length;
+  const livreeCount = safeDeliveries.filter(d => d.statut === 'livree').length;
+  const annuleeCount = safeDeliveries.filter(d => d.statut === 'annulee').length;
 
   if (error) {
     return (
@@ -113,9 +93,9 @@ export default function OrdersPage() {
           <AlertCircleIcon className="h-12 w-12 text-destructive mb-4" />
           <h3 className="text-lg font-semibold mb-2">Erreur de chargement</h3>
           <p className="text-muted-foreground text-center mb-4">
-            Impossible de charger les commandes. Vérifiez votre connexion.
+            Impossible de charger les livraisons. Vérifiez votre connexion.
           </p>
-          <Button onClick={() => { clearError(); fetchData(); }}>
+          <Button onClick={() => { clearErrors(); fetchData(); }}>
             <RefreshCwIcon className="mr-2 h-4 w-4" />
             Réessayer
           </Button>
@@ -130,12 +110,12 @@ export default function OrdersPage() {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10">
-              <PackageIcon className="h-6 w-6 text-primary" />
+              <TruckIcon className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Gestion des Commandes</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Gestion des Livraisons</h1>
               <p className="text-muted-foreground">
-                Suivez et gérez toutes les commandes clients
+                Suivez toutes les livraisons effectuées
               </p>
             </div>
           </div>
@@ -152,37 +132,22 @@ export default function OrdersPage() {
                 {loading ? <Skeleton className="h-8 w-16" /> : enAttenteCount}
               </div>
               <p className="text-xs text-muted-foreground">
-                Non assignées
+                Non commencées
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Acceptées</CardTitle>
-              <CheckCircleIcon className="h-4 w-4 text-blue-500" />
+              <CardTitle className="text-sm font-medium">Validées</CardTitle>
+              <TruckIcon className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {loading ? <Skeleton className="h-8 w-16" /> : accepteeCount}
+                {loading ? <Skeleton className="h-8 w-16" /> : valideeCount}
               </div>
               <p className="text-xs text-muted-foreground">
-                Assignées aux agents
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">En cours</CardTitle>
-              <TruckIcon className="h-4 w-4 text-purple-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {loading ? <Skeleton className="h-8 w-16" /> : enCoursCount}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                En livraison
+                En cours
               </p>
             </CardContent>
           </Card>
@@ -201,6 +166,21 @@ export default function OrdersPage() {
               </p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Annulées</CardTitle>
+              <XCircleIcon className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-16" /> : annuleeCount}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Non effectuées
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -208,9 +188,9 @@ export default function OrdersPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <CardTitle>Commandes</CardTitle>
+              <CardTitle>Livraisons</CardTitle>
               <CardDescription>
-                Liste de toutes les commandes
+                Liste de toutes les livraisons
               </CardDescription>
             </div>
             
@@ -235,7 +215,7 @@ export default function OrdersPage() {
                 <div className="relative">
                   <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Rechercher par client, code, agent..."
+                    placeholder="Rechercher par client, agent, code..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10"
@@ -244,7 +224,7 @@ export default function OrdersPage() {
               </div>
               
               <div className="flex gap-2">
-                <Select value={statusFilter} onValueChange={(value: StatutCommande | "all") => setStatusFilter(value)}>
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatutLivraison | "all")}>
                   <SelectTrigger className="w-[180px]">
                     <FilterIcon className="mr-2 h-4 w-4" />
                     <SelectValue placeholder="Filtrer par statut" />
@@ -257,16 +237,10 @@ export default function OrdersPage() {
                         En attente
                       </div>
                     </SelectItem>
-                    <SelectItem value="acceptee">
+                    <SelectItem value="validee">
                       <div className="flex items-center gap-2">
-                        <CheckCircleIcon className="h-4 w-4 text-blue-500" />
-                        Acceptée
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="en_cours">
-                      <div className="flex items-center gap-2">
-                        <TruckIcon className="h-4 w-4 text-purple-500" />
-                        En cours
+                        <TruckIcon className="h-4 w-4 text-blue-500" />
+                        Validée
                       </div>
                     </SelectItem>
                     <SelectItem value="livree">
@@ -291,19 +265,19 @@ export default function OrdersPage() {
                 {loading ? (
                   <Skeleton className="h-4 w-32" />
                 ) : (
-                  `${filteredOrders.length} commande(s) trouvée(s)`
+                  `${filteredDeliveries.length} livraison(s) trouvée(s)`
                 )}
               </div>
               
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">
-                  Total: {safeOrders.length}
+                  Total: {safeDeliveries.length}
                 </Badge>
               </div>
             </div>
           </div>
 
-          {loading && !commandes ? (
+          {loading && !livraisons ? (
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
@@ -319,16 +293,16 @@ export default function OrdersPage() {
             </div>
           ) : (
             <>
-              {filteredOrders.length === 0 && !loading ? (
+              {filteredDeliveries.length === 0 && !loading ? (
                 <div className="flex flex-col items-center justify-center p-12 text-center">
                   <div className="p-4 rounded-full bg-muted mb-4">
-                    <PackageIcon className="h-12 w-12 text-muted-foreground" />
+                    <TruckIcon className="h-12 w-12 text-muted-foreground" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">Aucune commande trouvée</h3>
+                  <h3 className="text-lg font-semibold mb-2">Aucune livraison trouvée</h3>
                   <p className="text-muted-foreground mb-6 max-w-md">
                     {searchQuery || statusFilter !== "all" 
-                      ? "Aucune commande ne correspond à vos critères de recherche."
-                      : "Aucune commande n'a encore été passée."}
+                      ? "Aucune livraison ne correspond à vos critères de recherche."
+                      : "Aucune livraison n'a encore été effectuée."}
                   </p>
                   {searchQuery || statusFilter !== "all" ? (
                     <Button
@@ -343,11 +317,9 @@ export default function OrdersPage() {
                   ) : null}
                 </div>
               ) : (
-                <OrderTable
-                  orders={filteredOrders}
+                <DeliveryTable
+                  deliveries={filteredDeliveries}
                   loading={loading}
-                  onAssign={handleAssign}
-                  onDelete={handleDelete}
                   onViewDetails={handleViewDetails}
                 />
               )}
@@ -356,18 +328,11 @@ export default function OrdersPage() {
         </CardContent>
       </Card>
 
-      <OrderAssignDialog
-        open={assignDialogOpen}
-        onOpenChange={setAssignDialogOpen}
-        order={selectedOrder}
-        onSuccess={handleOrderAssigned}
-      />
-
-      <OrderDeleteDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        order={selectedOrder}
-        onSuccess={handleOrderDeleted}
+      <DeliveryDetailDialog
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+        delivery={selectedDelivery}
+        onClose={handleDialogClose}
       />
     </div>
   );

@@ -50,7 +50,7 @@ export function ProductDialog({
   onSuccess,
 }: ProductDialogProps) {
   const { createProduit, updateProduit } = useProducts();
-  const { categories } = useCategories();
+  const { categories, loading: categoriesLoading, fetchCategories, error: categoriesError } = useCategories();
   
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<Partial<ProduitCreateRequest>>({
@@ -66,27 +66,55 @@ export function ProductDialog({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Charger les catégories quand le dialog s'ouvre
+  useEffect(() => {
+    if (open) {
+      console.log('Opening product dialog, fetching categories...');
+      fetchCategories().catch(error => {
+        console.error("Erreur lors du chargement des catégories:", error);
+        toast.error("Impossible de charger la liste des catégories");
+      });
+    }
+  }, [open, fetchCategories]);
+
   useEffect(() => {
     if (product && open) {
+      console.log('Setting form data for product:', product);
+      
+      // Trouver la catégorie correspondante
+      let categorieId = 0;
+      if (product.categorie && categories?.results) {
+        const categorie = categories.results.find(cat => cat.nom === product.categorie!.nom);
+        if (categorie) {
+          categorieId = categorie.id;
+        } else {
+          console.warn('Catégorie non trouvée:', product.categorie);
+        }
+      }
+      
       setFormData({
         nom: product.nom || "",
         marque: product.marque || "",
         volume: product.volume || "",
         unite_vente: product.unite_vente || "bouteille",
         prix_unitaire: parseFloat(product.prix_unitaire) || 0,
-        categorie_id: product.categorie || 0,
+        categorie_id: categorieId,
         actif: product.actif,
       });
       setPhotoPreview(null);
       setErrors({});
     } else if (open) {
+      console.log('Initializing new product form');
+      // Initialiser avec la première catégorie si disponible
+      const defaultCategorieId = categories?.results?.[0]?.id || 0;
+      
       setFormData({
         nom: "",
         marque: "",
         volume: "",
         unite_vente: "bouteille",
         prix_unitaire: 0,
-        categorie_id: categories?.results?.[0]?.id || 0,
+        categorie_id: defaultCategorieId,
         actif: true,
       });
       setPhoto(null);
@@ -205,7 +233,7 @@ export function ProductDialog({
               <Label htmlFor="photo" className="block mb-2">
                 Photo du produit
               </Label>
-                <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4">
                 <div className="relative">
                   {photoPreview ? (
                     <div className="h-24 w-24 rounded-lg overflow-hidden border-2 border-primary">
@@ -312,27 +340,76 @@ export function ProductDialog({
                 Catégorie
                 <span className="text-destructive">*</span>
               </Label>
-              <Select 
-                value={formData.categorie_id?.toString() || ""}
-                onValueChange={(value) => setFormData({ ...formData, categorie_id: parseInt(value) })}
-              >
-                <SelectTrigger className={errors.categorie_id ? "border-destructive" : ""}>
-                  <SelectValue placeholder="Sélectionner une catégorie" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories?.results?.map((category) => (
-                    <SelectItem key={category.id} value={category.id.toString()}>
-                      {category.nom} {!category.actif && "(inactive)"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              
+              {categoriesLoading ? (
+                <div className="flex items-center justify-center p-3 border rounded-md bg-muted/50">
+                  <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                  Chargement des catégories...
+                </div>
+              ) : categoriesError ? (
+                <div className="p-3 border border-destructive/20 rounded-md bg-destructive/10">
+                  <p className="text-sm text-destructive">
+                    Erreur: {categoriesError}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => fetchCategories()}
+                  >
+                    Réessayer
+                  </Button>
+                </div>
+              ) : (
+                <Select 
+                  value={formData.categorie_id?.toString() || ""}
+                  onValueChange={(value) => {
+                    console.log('Category selected:', value);
+                    setFormData({ ...formData, categorie_id: parseInt(value) });
+                  }}
+                  disabled={categoriesLoading}
+                >
+                  <SelectTrigger className={errors.categorie_id ? "border-destructive" : ""}>
+                    <SelectValue placeholder="Sélectionner une catégorie" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories?.results && categories.results.length > 0 ? (
+                      categories.results.map((category) => (
+                        <SelectItem key={category.id} value={category.id.toString()}>
+                          {category.nom} {!category.actif && "(inactive)"}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="0" disabled>
+                        Aucune catégorie disponible
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
+              
               {errors.categorie_id && (
                 <p className="text-sm text-destructive flex items-center gap-1">
                   <AlertCircleIcon className="h-3 w-3" />
                   {errors.categorie_id}
                 </p>
               )}
+              
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {categories?.results ? `${categories.results.length} catégories disponibles` : 'Chargement...'}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => fetchCategories()}
+                  disabled={categoriesLoading}
+                >
+                  Actualiser
+                </Button>
+              </div>
             </div>
 
             {/* Unité de vente */}

@@ -10,7 +10,6 @@ import {
   XCircleIcon,
   PackageIcon,
   CalendarIcon,
-  MapPinIcon,
   EyeIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +41,7 @@ export function DeliveryList({ deliveries, loading, onRefresh }: DeliveryListPro
         return (
           <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
             <TruckIcon className="mr-1 h-3 w-3" />
-            En cours
+            Validée
           </Badge>
         );
       case 'livree':
@@ -123,6 +122,9 @@ export function DeliveryList({ deliveries, loading, onRefresh }: DeliveryListPro
                     <h4 className="font-semibold">Livraison #{delivery.id}</h4>
                     {getStatusBadge(delivery.statut)}
                   </div>
+                  <p className="text-sm text-muted-foreground">
+                    {delivery.client_nom}
+                  </p>
                 </div>
               </div>
               <Button
@@ -150,23 +152,30 @@ export function DeliveryList({ deliveries, loading, onRefresh }: DeliveryListPro
                   <span>Date</span>
                 </div>
                 <div className="font-medium text-xs">
-                  {format(new Date(delivery.date_livraison), "dd MMM yyyy HH:mm", {
+                  {format(new Date(delivery.date_livraison), "dd MMM yyyy", {
                     locale: fr,
-                  })}
+                  })} • {delivery.heure_livraison}
                 </div>
               </div>
 
-              {delivery.commande?.latitude && delivery.commande?.longitude && (
-                <div>
-                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                    <MapPinIcon className="h-3 w-3" />
-                    <span>Position</span>
-                  </div>
-                  <div className="font-mono text-xs">
-                    {delivery.commande.latitude.toFixed(4)}, {delivery.commande.longitude.toFixed(4)}
-                  </div>
+              <div>
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <TruckIcon className="h-3 w-3" />
+                  <span>Agent</span>
                 </div>
-              )}
+                <div className="font-medium text-xs">
+                  {delivery.agent_prenom} {delivery.agent_nom}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-muted-foreground mb-1">
+                  Montant
+                </div>
+                <div className="font-bold text-green-600">
+                  {parseFloat(delivery.montant_total).toLocaleString('fr-FR')} FCFA
+                </div>
+              </div>
             </div>
           </div>
         ))}

@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { MapPinIcon, TruckIcon, NavigationIcon, RefreshCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTrackingDashboard } from "@/lib/hooks/useTrackingDashboard";
 
 interface OrderTrackingMapProps {
   deliveryLocation: { lat: number; lng: number };
-  agentLocation?: { lat: number; lng: number };
   orderId: number;
+  agentId?: number;
 }
 
 export function OrderTrackingMap({
   deliveryLocation,
-  agentLocation,
   orderId,
+  agentId,
 }: OrderTrackingMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -23,6 +24,42 @@ export function OrderTrackingMap({
   const [distance, setDistance] = useState<string | null>(null);
   const [duration, setDuration] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [agentLocation, setAgentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  
+  const { fetchPositions, positions } = useTrackingDashboard();
+
+  // Fetch agent position periodically
+  const fetchAgentPosition = useCallback(async () => {
+    if (!agentId) return;
+    
+    try {
+      await fetchPositions({ agent_id: agentId });
+    } catch (error) {
+      console.error("Error fetching agent position:", error);
+    }
+  }, [agentId, fetchPositions]);
+
+  useEffect(() => {
+    if (agentId) {
+      fetchAgentPosition();
+      
+      // Poll for position updates every 10 seconds
+      const interval = setInterval(fetchAgentPosition, 10000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [agentId, fetchAgentPosition]);
+
+  // Update agent location when positions change
+  useEffect(() => {
+    if (positions && positions.length > 0) {
+      const latestPosition = positions[0];
+      setAgentLocation({
+        lat: parseFloat(latestPosition.latitude),
+        lng: parseFloat(latestPosition.longitude),
+      });
+    }
+  }, [positions]);
 
   // Initialize map
   useEffect(() => {
@@ -193,6 +230,10 @@ export function OrderTrackingMap({
     }
   };
 
+  const handleRefresh = () => {
+    fetchAgentPosition();
+  };
+
   return (
     <div className="relative">
       <div
@@ -231,7 +272,7 @@ export function OrderTrackingMap({
             </div>
           )}
           
-          {!agentLocation && (
+          {!agentLocation && agentId && (
             <div className="bg-orange-50 border border-orange-200 rounded-lg shadow-lg p-3">
               <div className="flex items-center gap-2">
                 <MapPinIcon className="h-4 w-4 text-orange-600" />
@@ -243,14 +284,26 @@ export function OrderTrackingMap({
           )}
         </div>
 
-        <Button
-          size="sm"
-          variant="secondary"
-          className="bg-white shadow-lg hover:bg-gray-50"
-          onClick={handleCenterMap}
-        >
-          <NavigationIcon className="h-4 w-4" />
-        </Button>
+        <div className="flex gap-2">
+          {agentId && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="bg-white shadow-lg hover:bg-gray-50"
+              onClick={handleRefresh}
+            >
+              <RefreshCwIcon className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="secondary"
+            className="bg-white shadow-lg hover:bg-gray-50"
+            onClick={handleCenterMap}
+          >
+            <NavigationIcon className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Legend */}
