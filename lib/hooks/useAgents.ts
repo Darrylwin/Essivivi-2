@@ -275,9 +275,6 @@ export function useAgents(): UseAgentsReturn {
         // Format 2: Object with pagination
         if ('results' in response && Array.isArray(response.results)) {
           tricyclesArray = response.results;
-        } else if ('data' in response && Array.isArray(response.data)) {
-          // Format 3: Object with data
-          tricyclesArray = response.data;
         } else {
           // Try to extract array from object
           const values = Object.values(response);

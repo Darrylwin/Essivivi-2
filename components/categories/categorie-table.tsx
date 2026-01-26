@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,72 +30,99 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
-  EyeIcon,
   EditIcon,
   Trash2Icon,
   MoreVerticalIcon,
   TagIcon,
-  PackageIcon,
-  FileTextIcon,
   CalendarIcon,
+  HashIcon,
+  EyeIcon,
+  PackageIcon,
+  CheckIcon,
+  XIcon,
+  ArrowUpDownIcon,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { CategorieListItem } from "@/lib/types";
 
-interface CategorieTableProps {
-  categories: any[];
+interface CategoryTableProps {
+  categories: CategorieListItem[];
   loading: boolean;
-  onView: (categorie: any) => void;
-  onEdit: (categorie: any) => void;
-  onDelete: (categorie: any) => void;
+  onEdit: (category: CategorieListItem) => void;
+  onDelete: (category: CategorieListItem) => void;
 }
 
-export function CategorieTable({
+export function CategoryTable({
   categories,
   loading,
-  onView,
   onEdit,
   onDelete,
-}: CategorieTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+}: CategoryTableProps) {
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: "nombre_produits", desc: true }
+  ]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [rowSelection, setRowSelection] = useState({});
 
-  const columns: ColumnDef<any>[] = [
+  const columns: ColumnDef<CategorieListItem>[] = [
     {
       accessorKey: "nom",
-      header: "Nom",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="font-semibold hover:bg-transparent"
+          >
+            Catégorie
+            <ArrowUpDownIcon className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <TagIcon className="h-4 w-4 text-muted-foreground" />
-          <div>
-            <div className="font-medium">{row.getValue("nom")}</div>
-            {row.original.description && (
-              <div className="text-sm text-muted-foreground line-clamp-1">
-                {row.original.description}
-              </div>
-            )}
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <TagIcon className="h-4 w-4 text-primary" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-semibold">
+              {row.getValue("nom")}
+            </span>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <HashIcon className="h-3 w-3" />
+              ID: #{row.original.id}
+            </div>
           </div>
         </div>
       ),
     },
     {
       accessorKey: "nombre_produits",
-      header: "Produits",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="font-semibold hover:bg-transparent"
+          >
+            Produits
+            <ArrowUpDownIcon className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <PackageIcon className="h-3 w-3" />
-          <Badge variant={row.getValue("nombre_produits") > 0 ? "default" : "outline"}>
-            {row.getValue("nombre_produits")} produit(s)
-          </Badge>
+          <PackageIcon className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium">{row.getValue("nombre_produits")}</span>
         </div>
       ),
     },
@@ -102,27 +130,17 @@ export function CategorieTable({
       accessorKey: "actif",
       header: "Statut",
       cell: ({ row }) => {
-        const actif = row.getValue("actif");
-        return (
-          <Badge variant={actif ? "default" : "outline"}>
-            {actif ? "Active" : "Inactive"}
+        const isActive = row.getValue("actif") as boolean;
+        return isActive ? (
+          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+            <CheckIcon className="mr-1 h-3 w-3" />
+            Active
           </Badge>
-        );
-      },
-      filterFn: "equals",
-    },
-    {
-      accessorKey: "created_at",
-      header: "Date création",
-      cell: ({ row }) => {
-        const date = new Date(row.getValue("created_at"));
-        return (
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="h-3 w-3" />
-            <span className="text-sm">
-              {format(date, "dd MMM yyyy", { locale: fr })}
-            </span>
-          </div>
+        ) : (
+          <Badge variant="outline" className="text-red-600 border-red-200">
+            <XIcon className="mr-1 h-3 w-3" />
+            Inactive
+          </Badge>
         );
       },
     },
@@ -130,7 +148,7 @@ export function CategorieTable({
       id: "actions",
       header: "Actions",
       cell: ({ row }) => {
-        const categorie = row.original;
+        const category = row.original;
         
         return (
           <DropdownMenu>
@@ -140,29 +158,24 @@ export function CategorieTable({
                 <MoreVerticalIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => onView(categorie)}>
-                <EyeIcon className="mr-2 h-4 w-4" />
-                Voir détails
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEdit(categorie)}>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onEdit(category)}>
                 <EditIcon className="mr-2 h-4 w-4" />
                 Modifier
               </DropdownMenuItem>
+              <DropdownMenuItem className="text-muted-foreground">
+                <EyeIcon className="mr-2 h-4 w-4" />
+                Voir les produits
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => onDelete(categorie)}
-                className="text-red-600 focus:text-red-600"
-                disabled={categorie.nombre_produits > 0}
+                onClick={() => onDelete(category)}
+                className="text-destructive focus:text-destructive"
               >
                 <Trash2Icon className="mr-2 h-4 w-4" />
                 Supprimer
-                {categorie.nombre_produits > 0 && (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    ({categorie.nombre_produits} produits)
-                  </span>
-                )}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -188,23 +201,40 @@ export function CategorieTable({
       globalFilter,
       rowSelection,
     },
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
   });
 
   if (loading && categories.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-muted-foreground">Chargement des catégories...</div>
+      <div className="space-y-3">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="h-6 w-20" />
+            <Skeleton className="h-8 w-8 rounded-full" />
+          </div>
+        ))}
       </div>
     );
   }
 
   if (!loading && categories.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-8">
-        <TagIcon className="h-12 w-12 text-muted-foreground mb-4" />
+      <div className="flex flex-col items-center justify-center p-12 text-center">
+        <div className="p-4 rounded-full bg-muted mb-4">
+          <TagIcon className="h-12 w-12 text-muted-foreground" />
+        </div>
         <h3 className="text-lg font-semibold mb-2">Aucune catégorie trouvée</h3>
-        <p className="text-muted-foreground text-center mb-4">
-          Commencez par créer votre première catégorie pour organiser vos produits.
+        <p className="text-muted-foreground max-w-md">
+          Aucune catégorie ne correspond à vos critères de recherche.
         </p>
       </div>
     );
@@ -212,40 +242,14 @@ export function CategorieTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between p-4">
-        <Input
-          placeholder="Filtrer les catégories..."
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="max-w-sm"
-        />
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronRightIcon className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      
-      <div className="border rounded-md">
+      {/* Table */}
+      <div className="rounded-md border overflow-hidden">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-muted/50">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} className="h-12">
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -263,11 +267,10 @@ export function CategorieTable({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => onView(row.original)}
+                  className="hover:bg-muted/50 transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-3">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -290,47 +293,60 @@ export function CategorieTable({
         </Table>
       </div>
       
-      <div className="flex items-center justify-between px-2">
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          {table.getFilteredRowModel().rows.length} catégorie(s)
+          {table.getFilteredRowModel().rows.length} catégorie(s) au total
         </div>
         <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronsLeftIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-          </Button>
-          <span className="text-sm">
-            Page {table.getState().pagination.pageIndex + 1} sur{" "}
-            {table.getPageCount()}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronRightIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronsRightIcon className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.setPageIndex(0)}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronsLeftIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronLeftIcon className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-1 text-sm">
+              <span>Page</span>
+              <span className="font-semibold">
+                {table.getState().pagination.pageIndex + 1}
+              </span>
+              <span>sur</span>
+              <span className="font-semibold">
+                {table.getPageCount()}
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              <ChevronRightIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+              disabled={!table.getCanNextPage()}
+            >
+              <ChevronsRightIcon className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>

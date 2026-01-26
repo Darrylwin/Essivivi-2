@@ -1,44 +1,51 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect } from "react";
-import { CategorieTable } from "@/components/categories/categorie-table";
-import { CategorieDialog } from "@/components/categories/categorie-dialog";
-import { CategorieDeleteDialog } from "@/components/categories/categorie-delete-dialog";
-import { CategorieViewDialog } from "@/components/categories/categorie-view-dialog";
-import { useProducts } from "@/lib/hooks/useProducts";
+import { CategoryTable } from "@/components/categories/categorie-table";
+import { CategoryDialog } from "@/components/categories/categorie-dialog";
+import { CategoryDeleteDialog } from "@/components/categories/categorie-delete-dialog";
+import { useCategories } from "@/lib/hooks/useCategories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusIcon, FilterIcon, RefreshCwIcon, TagIcon } from "lucide-react";
-import { toast } from "sonner";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+  PlusIcon,
+  SearchIcon,
+  RefreshCwIcon,
+  TagIcon,
+  PackageIcon,
+  CheckIcon,
+  XIcon,
+  AlertCircleIcon,
+  FilterIcon,
+  GridIcon,
+  TableIcon,
+  LayersIcon,
+} from "lucide-react";
+import { toast } from "sonner";
+import type { CategorieListItem } from "@/lib/types";
+import { CategoryGrid } from "@/components/categories/category-grid";
+import { Toggle } from "@/components/ui/toggle";
 
 export default function CategoriesPage() {
   const {
     categories,
-    categoriesCount,
-    categoriesLoading,
-    categoriesError,
+    categorie,
+    loading,
+    error,
     fetchCategories,
-    clearErrors,
-    stats,
-  } = useProducts();
+    clearError,
+  } = useCategories();
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedCategorie, setSelectedCategorie] = useState<any>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CategorieListItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [avecProduitsFilter, setAvecProduitsFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [showProducts, setShowProducts] = useState(false);
 
   // Initial fetch
   useEffect(() => {
@@ -48,231 +55,380 @@ export default function CategoriesPage() {
 
   const fetchData = async () => {
     try {
-      await fetchCategories({ avec_produits: true });
+      await fetchCategories({ avec_produits: showProducts });
+      toast.success("Liste des catégories actualisée");
     } catch (error) {
       toast.error("Erreur lors du chargement des catégories");
     }
   };
 
-  const handleSearch = () => {
-    // Recherche côté client
-  };
-
   const handleCreate = () => {
-    setSelectedCategorie(null);
+    setSelectedCategory(null);
     setDialogOpen(true);
   };
 
-  const handleView = (categorie: any) => {
-    setSelectedCategorie(categorie);
-    setViewDialogOpen(true);
-  };
-
-  const handleEdit = (categorie: any) => {
-    setSelectedCategorie(categorie);
+  const handleEdit = (categoryItem: CategorieListItem) => {
+    setSelectedCategory(categoryItem);
     setDialogOpen(true);
   };
 
-  const handleDelete = (categorie: any) => {
-    setSelectedCategorie(categorie);
+  const handleDelete = (categoryItem: CategorieListItem) => {
+    setSelectedCategory(categoryItem);
     setDeleteDialogOpen(true);
   };
 
-  const handleCategorieCreated = () => {
+  const handleCategoryCreated = () => {
     setDialogOpen(false);
     fetchData();
     toast.success("Catégorie créée avec succès");
   };
 
-  const handleCategorieUpdated = () => {
+  const handleCategoryUpdated = () => {
     setDialogOpen(false);
     fetchData();
     toast.success("Catégorie mise à jour avec succès");
   };
 
-  const handleCategorieDeleted = () => {
+  const handleCategoryDeleted = () => {
     setDeleteDialogOpen(false);
     fetchData();
     toast.success("Catégorie supprimée avec succès");
   };
 
-  const handleStatusFilter = (value: string) => {
-    setStatusFilter(value);
-    fetchCategories({
-      actif: value !== "all" ? value === "actif" : undefined,
-      avec_produits: true,
-    });
-  };
+  // S'assurer que categories.results est toujours un tableau
+  const safeCategories = categories?.results && Array.isArray(categories.results) ? categories.results : [];
+  
+  // Filtrer les catégories
+  const filteredCategories = safeCategories.filter((categoryItem) => {
+    // Filtre de recherche
+    const matchesSearch = searchQuery === "" || 
+      categoryItem.nom.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Filtre par statut
+    const matchesStatus = statusFilter === "all" || 
+      (statusFilter === "active" && categoryItem.actif) ||
+      (statusFilter === "inactive" && !categoryItem.actif);
+    
+    return matchesSearch && matchesStatus;
+  });
 
-  const handleAvecProduitsFilter = (value: string) => {
-    setAvecProduitsFilter(value);
-    fetchCategories({
-      avec_produits: value !== "all" ? value === "avec" : undefined,
-    });
-  };
+  // Calculer les statistiques
+  const activeCount = safeCategories.filter(c => c.actif).length;
+  const inactiveCount = safeCategories.filter(c => !c.actif).length;
+  const totalProducts = safeCategories.reduce((sum, cat) => sum + cat.nombre_produits, 0);
+  const averageProducts = safeCategories.length > 0 ? (totalProducts / safeCategories.length).toFixed(1) : "0";
 
-  // Filtrer les catégories côté client basé sur la recherche
-  const filteredCategories = Array.isArray(categories)
-    ? categories.filter(categorie =>
-        categorie.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (categorie.description && categorie.description.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : [];
-
-  if (categoriesError) {
+  if (error) {
     return (
-      <div className="flex flex-col items-center justify-center p-8">
-        <div className="text-red-500 mb-4">{categoriesError}</div>
-        <Button onClick={() => { clearErrors(); fetchData(); }}>
-          Réessayer
-        </Button>
+      <div className="container mx-auto p-6">
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircleIcon className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <div className="flex flex-col items-center justify-center p-8 rounded-lg border border-dashed">
+          <AlertCircleIcon className="h-12 w-12 text-destructive mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Erreur de chargement</h3>
+          <p className="text-muted-foreground text-center mb-4">
+            Impossible de charger les catégories. Vérifiez votre connexion.
+          </p>
+          <Button onClick={() => { clearError(); fetchData(); }}>
+            <RefreshCwIcon className="mr-2 h-4 w-4" />
+            Réessayer
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col p-4 md:p-6">
+    <div className="container mx-auto p-4 md:p-6 space-y-6">
+      {/* Header */}
       <div className="flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Gestion des Catégories</h1>
-            <p className="text-muted-foreground">
-              Organisez vos produits par catégories ({categoriesCount} catégories)
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchData}
-              disabled={categoriesLoading}
-            >
-              <RefreshCwIcon className="mr-2 h-4 w-4" />
-              Actualiser
-            </Button>
-            
-            <Button size="sm" onClick={handleCreate}>
-              <PlusIcon className="mr-2 h-4 w-4" />
-              Nouvelle catégorie
-            </Button>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <LayersIcon className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Gestion des Catégories</h1>
+              <p className="text-muted-foreground">
+                Organisez vos produits en catégories pour une meilleure gestion
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 items-center gap-2">
-            <Input
-              placeholder="Rechercher une catégorie..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="max-w-sm"
-            />
-            
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleSearch}
-              disabled={categoriesLoading}
-            >
-              <FilterIcon className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Select value={statusFilter} onValueChange={handleStatusFilter}>
-              <SelectTrigger className="w-32">
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="actif">Actives</SelectItem>
-                <SelectItem value="inactif">Inactives</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Select value={avecProduitsFilter} onValueChange={handleAvecProduitsFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Avec produits" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes</SelectItem>
-                <SelectItem value="avec">Avec produits</SelectItem>
-                <SelectItem value="sans">Sans produits</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        {/* Stats Cards */}
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total catégories</CardTitle>
+              <TagIcon className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-16" /> : safeCategories.length}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Toutes les catégories
+              </p>
+            </CardContent>
+          </Card>
 
-        {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-3">
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <TagIcon className="h-4 w-4 text-muted-foreground" />
-                <div className="text-sm font-medium text-muted-foreground">Total catégories</div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Catégories actives</CardTitle>
+              <CheckIcon className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-16" /> : activeCount}
               </div>
-              <div className="text-2xl font-bold mt-2">{categoriesCount}</div>
+              <p className="text-xs text-muted-foreground">
+                Visibles dans le catalogue
+              </p>
             </CardContent>
           </Card>
-          
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Badge variant="default" className="h-2 w-2 p-0" />
-                <div className="text-sm font-medium text-muted-foreground">Catégories actives</div>
-              </div>
-              <div className="text-2xl font-bold mt-2">
-                {filteredCategories.filter(c => c.actif).length}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="h-2 w-2 p-0" />
-                <div className="text-sm font-medium text-muted-foreground">Total produits</div>
-              </div>
-              <div className="text-2xl font-bold mt-2">
-                {filteredCategories.reduce((acc, cat) => acc + cat.nombre_produits, 0)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
-        {/* Table */}
-        <div className="rounded-lg border">
-          <CategorieTable
-            categories={filteredCategories}
-            loading={categoriesLoading}
-            onView={handleView}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-          />
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Produits total</CardTitle>
+              <PackageIcon className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-16" /> : totalProducts}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Tous produits confondus
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Moyenne produits</CardTitle>
+              <LayersIcon className="h-4 w-4 text-purple-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? <Skeleton className="h-8 w-16" /> : averageProducts}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Produits par catégorie
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
+      {/* Main Content */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle>Catégories</CardTitle>
+              <CardDescription>
+                Liste de toutes les catégories de produits
+              </CardDescription>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Toggle
+                pressed={showProducts}
+                onPressedChange={(pressed) => {
+                  setShowProducts(pressed);
+                  fetchCategories({ avec_produits: pressed });
+                }}
+                aria-label="Afficher les produits"
+                variant="outline"
+                size="sm"
+              >
+                <PackageIcon className="mr-2 h-4 w-4" />
+                Produits
+              </Toggle>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchData}
+                disabled={loading}
+              >
+                <RefreshCwIcon className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+              
+              <Button size="sm" onClick={handleCreate}>
+                <PlusIcon className="mr-2 h-4 w-4" />
+                Nouvelle catégorie
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        
+        <CardContent>
+          {/* Filters and Search */}
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher par nom de catégorie..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setStatusFilter("all")}
+                  className={statusFilter === "all" ? "bg-primary/10" : ""}
+                >
+                  <FilterIcon className="mr-2 h-4 w-4" />
+                  Toutes
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setStatusFilter("active")}
+                  className={statusFilter === "active" ? "bg-primary/10" : ""}
+                >
+                  <CheckIcon className="mr-2 h-4 w-4 text-green-500" />
+                  Actives
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setStatusFilter("inactive")}
+                  className={statusFilter === "inactive" ? "bg-primary/10" : ""}
+                >
+                  <XIcon className="mr-2 h-4 w-4 text-red-500" />
+                  Inactives
+                </Button>
+              </div>
+            </div>
+
+            {/* View Toggle and Results */}
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-muted-foreground">
+                {loading ? (
+                  <Skeleton className="h-4 w-32" />
+                ) : (
+                  `${filteredCategories.length} catégorie(s) trouvée(s)`
+                )}
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={viewMode === "grid" ? "default" : "outline"}
+                  size="icon"
+                  onClick={() => setViewMode("grid")}
+                >
+                  <GridIcon className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "table" ? "default" : "outline"}
+                  size="icon"
+                  onClick={() => setViewMode("table")}
+                >
+                  <TableIcon className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Loading State */}
+          {loading && !categories ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* Empty State */}
+              {filteredCategories.length === 0 && !loading ? (
+                <div className="flex flex-col items-center justify-center p-12 text-center">
+                  <div className="p-4 rounded-full bg-muted mb-4">
+                    <LayersIcon className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Aucune catégorie trouvée</h3>
+                  <p className="text-muted-foreground mb-6 max-w-md">
+                    {searchQuery || statusFilter !== "all" 
+                      ? "Aucune catégorie ne correspond à vos critères de recherche."
+                      : "Commencez par créer votre première catégorie pour organiser vos produits."}
+                  </p>
+                  {searchQuery || statusFilter !== "all" ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setStatusFilter("all");
+                      }}
+                    >
+                      Effacer les filtres
+                    </Button>
+                  ) : (
+                    <Button onClick={handleCreate}>
+                      <PlusIcon className="mr-2 h-4 w-4" />
+                      Créer une catégorie
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* Grid View */}
+                  {viewMode === "grid" && (
+                    <CategoryGrid
+                      categories={filteredCategories}
+                      loading={loading}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                    />
+                  )}
+
+                  {/* Table View */}
+                  {viewMode === "table" && (
+                    <CategoryTable
+                      categories={filteredCategories}
+                      loading={loading}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                    />
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Dialogs */}
-      <CategorieDialog
+      <CategoryDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        categorie={selectedCategorie}
-        onSuccess={selectedCategorie ? handleCategorieUpdated : handleCategorieCreated}
+        category={selectedCategory}
+        onSuccess={selectedCategory ? handleCategoryUpdated : handleCategoryCreated}
       />
 
-      <CategorieViewDialog
-        open={viewDialogOpen}
-        onOpenChange={setViewDialogOpen}
-        categorie={selectedCategorie}
-      />
-
-      <CategorieDeleteDialog
+      <CategoryDeleteDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        categorie={selectedCategorie}
-        onSuccess={handleCategorieDeleted}
+        category={selectedCategory}
+        onSuccess={handleCategoryDeleted}
       />
     </div>
   );

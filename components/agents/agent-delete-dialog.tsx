@@ -148,25 +148,6 @@ export function AgentDeleteDialog({
             </div>
           </div>
           
-          {/* Warning Alerts */}
-          {hasAssignments ? (
-            <Alert variant="destructive">
-              <AlertCircleIcon className="h-4 w-4" />
-              <AlertDescription className="font-medium">
-                Cet agent a des commandes ou tournées en cours. Veuillez d&apos;abord les réassigner avant de le supprimer.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <Alert variant="destructive">
-              <AlertCircleIcon className="h-4 w-4" />
-              <AlertDescription>
-                <div className="font-medium mb-1">Attention : Action irréversible</div>
-                La suppression d&apos;un agent affectera toutes ses commandes, tournées et statistiques.
-                Cette action ne peut pas être annulée.
-              </AlertDescription>
-            </Alert>
-          )}
-          
           {/* Confirmation */}
           <div className="space-y-3">
             <div className="text-sm">
