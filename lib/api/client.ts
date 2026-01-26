@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * =====================================================
  * API Client Principal
@@ -7,7 +6,7 @@
  * Gère l'authentification, les headers et les erreurs
  * 
  * @module lib/api/client
- * @version 1.1 - Ajout du logging détaillé
+ * @version 1.2 - Logging COMPLET des erreurs
  */
 
 export interface ApiResponse<T = unknown> {
@@ -18,7 +17,12 @@ export interface ApiResponse<T = unknown> {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public code?: string) {
+  constructor(
+    message: string, 
+    public status: number, 
+    public code?: string,
+    public rawResponse?: any
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -71,12 +75,48 @@ export class ApiClient {
   }
 
   /**
-   * Log une erreur API
+   * Log une erreur API - LOG TOUT LE BODY DE LA RÉPONSE
    */
-  private logError(method: string, endpoint: string, error: any, duration?: number) {
+  private logError(method: string, endpoint: string, error: any, responseData: any, duration?: number) {
     console.group(`❌ API Error: ${method} ${endpoint}`);
-    console.error('Error:', error);
+    console.error('Error Object:', error);
     console.log('Duration:', duration ? `${duration}ms` : 'N/A');
+    console.log('========== RÉPONSE COMPLÈTE DE L\'ERREUR ==========');
+    console.log('Status:', error.status || 'N/A');
+    console.log('Code:', error.code || 'N/A');
+    console.log('Message:', error.message || 'N/A');
+    console.log('----------- CORPS COMPLET DE LA RÉPONSE -----------');
+    
+    // Afficher ABSOLUMENT TOUT le contenu de la réponse
+    if (typeof responseData === 'string') {
+      console.log('Type: String');
+      console.log('Contenu:', responseData);
+    } else if (typeof responseData === 'object' && responseData !== null) {
+      console.log('Type: Object');
+      
+      // Afficher TOUTES les propriétés
+      console.log('Toutes les propriétés:');
+      for (const key in responseData) {
+        console.log(`  ${key}:`, responseData[key]);
+      }
+      
+      // Afficher aussi les propriétés non-énumérables
+      console.log('Propriétés non-énumérables:');
+      console.log('  toString():', responseData.toString());
+      
+      // Si c'est un tableau, afficher tous les éléments
+      if (Array.isArray(responseData)) {
+        console.log('Tableau complet:');
+        responseData.forEach((item, index) => {
+          console.log(`  [${index}]:`, item);
+        });
+      }
+    } else {
+      console.log('Type:', typeof responseData);
+      console.log('Valeur:', responseData);
+    }
+    
+    console.log('=================================================');
     console.groupEnd();
   }
 
@@ -144,7 +184,7 @@ export class ApiClient {
   }
 
   /**
-   * Gère les erreurs HTTP
+   * Gère les erreurs HTTP - LOG TOUTE LA RÉPONSE
    */
   private async handleResponse<T>(method: string, endpoint: string, response: Response, startTime: number): Promise<T> {
     const duration = Date.now() - startTime;
@@ -162,10 +202,11 @@ export class ApiClient {
       }
 
       if (!response.ok) {
-        const errorMessage = data?.error || data?.message || `HTTP ${response.status}: ${response.statusText}`;
-        const error = new ApiError(errorMessage, response.status, data?.code);
+        // LOG TOUTE LA RÉPONSE D'ERREUR
+        const errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        const error = new ApiError(errorMessage, response.status, data?.code, data);
         
-        this.logError(method, endpoint, error, duration);
+        this.logError(method, endpoint, error, data, duration);
         throw error;
       }
 
@@ -178,11 +219,21 @@ export class ApiClient {
       }
       
       // Erreur de parsing JSON ou autre
+      // On essaye de récupérer le texte brut de la réponse
+      let rawText = '';
+      try {
+        rawText = await response.text();
+      } catch {
+        // Ignorer si on ne peut pas lire le texte
+      }
+      
       const apiError = new ApiError(
         `HTTP ${response.status}: Failed to parse response`,
-        response.status
+        response.status,
+        undefined,
+        rawText || 'Impossible de lire la réponse'
       );
-      this.logError(method, endpoint, apiError, duration);
+      this.logError(method, endpoint, apiError, rawText || 'Pas de réponse', duration);
       throw apiError;
     }
   }
@@ -218,9 +269,11 @@ export class ApiClient {
       
       const apiError = new ApiError(
         `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        0
+        0,
+        undefined,
+        { networkError: true, originalError: error }
       );
-      this.logError('GET', endpoint, apiError, Date.now() - startTime);
+      this.logError('GET', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
       throw apiError;
     }
   }
@@ -251,9 +304,11 @@ export class ApiClient {
       
       const apiError = new ApiError(
         `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        0
+        0,
+        undefined,
+        { networkError: true, originalError: error }
       );
-      this.logError('POST', endpoint, apiError, Date.now() - startTime);
+      this.logError('POST', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
       throw apiError;
     }
   }
@@ -284,9 +339,11 @@ export class ApiClient {
       
       const apiError = new ApiError(
         `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        0
+        0,
+        undefined,
+        { networkError: true, originalError: error }
       );
-      this.logError('PUT', endpoint, apiError, Date.now() - startTime);
+      this.logError('PUT', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
       throw apiError;
     }
   }
@@ -317,9 +374,11 @@ export class ApiClient {
       
       const apiError = new ApiError(
         `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        0
+        0,
+        undefined,
+        { networkError: true, originalError: error }
       );
-      this.logError('PATCH', endpoint, apiError, Date.now() - startTime);
+      this.logError('PATCH', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
       throw apiError;
     }
   }
@@ -346,9 +405,11 @@ export class ApiClient {
       
       const apiError = new ApiError(
         `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        0
+        0,
+        undefined,
+        { networkError: true, originalError: error }
       );
-      this.logError('DELETE', endpoint, apiError, Date.now() - startTime);
+      this.logError('DELETE', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
       throw apiError;
     }
   }

@@ -52,7 +52,7 @@ export function AgentDialog({
   agent,
   onSuccess,
 }: AgentDialogProps) {
-  const { createAgent, updateAgent, patchAgent, tricycles } = useAgents();
+  const { createAgent, updateAgent, patchAgent, tricycles, fetchTricycles, tricyclesLoading } = useAgents();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<Partial<AgentCreateRequest>>({
     nom: "",
@@ -68,7 +68,27 @@ export function AgentDialog({
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showPassword, setShowPassword] = useState(false); // ← Pour afficher/cacher le mot de passe
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Charger les tricycles quand le dialog s'ouvre
+  useEffect(() => {
+    if (open) {
+      fetchTricycles().catch(error => {
+        console.error("Erreur lors du chargement des tricycles:", error);
+        toast.error("Impossible de charger la liste des tricycles");
+      });
+    }
+  }, [open, fetchTricycles]);
+
+  // Aussi charger les tricycles si l'agent a un tricycle assigné
+  useEffect(() => {
+    if (agent && open && agent.tricycle_plaque && !tricycles) {
+      fetchTricycles().catch(error => {
+        console.error("Erreur lors du chargement des tricycles:", error);
+        toast.error("Impossible de charger la liste des tricycles");
+      });
+    }
+  }, [agent, open, tricycles, fetchTricycles]);
 
   useEffect(() => {
     if (agent && open) {
@@ -79,9 +99,18 @@ export function AgentDialog({
         email: agent.email || "",
         date_naissance: agent.date_naissance || "",
         adresse: agent.adresse || "",
-        tricycle_id: null,
-        mot_de_passe: "", // ← Vide pour l'édition
+        tricycle_id: null, // On va le mettre à jour après
+        mot_de_passe: "",
       });
+      
+      // Si l'agent a un tricycle, récupérer l'ID depuis la liste des tricycles
+      if (agent.tricycle_plaque && tricycles) {
+        const tricycle = tricycles.find(t => t.plaque_immatriculation === agent.tricycle_plaque);
+        if (tricycle) {
+          setFormData(prev => ({ ...prev, tricycle_id: tricycle.id }));
+        }
+      }
+      
       if ('statut' in agent) {
         setStatut(agent.statut);
       }
@@ -103,7 +132,7 @@ export function AgentDialog({
       setPhotoPreview(null);
       setErrors({});
     }
-  }, [agent, open]);
+  }, [agent, open, tricycles]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -116,7 +145,6 @@ export function AgentDialog({
     if (!formData.date_naissance?.trim()) newErrors.date_naissance = "La date de naissance est requise";
     if (!formData.adresse?.trim()) newErrors.adresse = "L'adresse est requise";
     
-    // Validation du mot de passe seulement pour la création
     if (!agent) {
       if (!formData.mot_de_passe?.trim()) newErrors.mot_de_passe = "Le mot de passe est requis";
       else if (formData.mot_de_passe.length < 6) newErrors.mot_de_passe = "Le mot de passe doit contenir au moins 6 caractères";
@@ -135,29 +163,43 @@ export function AgentDialog({
     
     setLoading(true);
     try {
-      if (agent) {
-        // Pour la mise à jour, on ne modifie pas le mot de passe ici
-        // (prévoir une fonctionnalité séparée pour changer le mot de passe)
-        const updateData: AgentUpdateRequest = {
-          ...formData,
-          statut,
-          photo: photo || undefined,
-        };
-        await updateAgent(agent.id, updateData);
+      // Préparer les données pour l'API
+      const apiData: any = {
+        nom: formData.nom?.trim(),
+        prenom: formData.prenom?.trim(),
+        telephone: formData.telephone?.trim(),
+        email: formData.email?.trim(),
+        date_naissance: formData.date_naissance?.trim(),
+        adresse: formData.adresse?.trim(),
+      };
+      
+      // Gérer le tricycle - important: envoyer null si pas de tricycle sélectionné
+      if (formData.tricycle_id) {
+        apiData.tricycle_id = formData.tricycle_id;
       } else {
-        // Pour la création, inclure le mot de passe
-        const createData: AgentCreateRequest = {
-          ...formData as Required<AgentCreateRequest>,
-          mot_de_passe: formData.mot_de_passe!, // ← Mot de passe saisi par l'utilisateur
-          photo: photo || undefined,
-        };
-        await createAgent(createData);
+        apiData.tricycle_id = null; // Explicitement null
+      }
+      
+      // Gérer la photo
+      if (photo) {
+        apiData.photo = photo;
+      }
+      
+      if (agent) {
+        // Pour la mise à jour
+        apiData.statut = statut;
+        await updateAgent(agent.id, apiData);
+      } else {
+        // Pour la création
+        apiData.mot_de_passe = formData.mot_de_passe?.trim();
+        await createAgent(apiData as AgentCreateRequest);
       }
       
       onSuccess();
       onOpenChange(false);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Une erreur est survenue lors de l'enregistrement";
+      console.error("Erreur lors de l'enregistrement:", error);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -446,22 +488,45 @@ export function AgentDialog({
                 <BikeIcon className="h-4 w-4" />
                 Tricycle assigné
               </Label>
-              <Select 
-                value={formData.tricycle_id?.toString() || "none"} 
-                onValueChange={(value) => setFormData({ ...formData, tricycle_id: value === "none" ? null : parseInt(value) })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un tricycle" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Aucun tricycle</SelectItem>
-                  {tricycles?.map((tricycle) => (
-                    <SelectItem key={tricycle.id} value={tricycle.id.toString()}>
-                      {tricycle.plaque_immatriculation}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {tricyclesLoading ? (
+                <div className="flex items-center justify-center p-3 border rounded-md">
+                  <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                  Chargement des tricycles...
+                </div>
+              ) : (
+                <Select 
+                  value={formData.tricycle_id?.toString() || "none"} 
+                  onValueChange={(value) => {
+                    if (value === "none") {
+                      setFormData({ ...formData, tricycle_id: null });
+                    } else {
+                      setFormData({ ...formData, tricycle_id: parseInt(value) });
+                    }
+                  }}
+                  disabled={tricyclesLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un tricycle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Aucun tricycle</SelectItem>
+                    {tricycles && tricycles.length > 0 ? (
+                      tricycles.map((tricycle) => (
+                        <SelectItem key={tricycle.id} value={tricycle.id.toString()}>
+                          {tricycle.plaque_immatriculation}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        Aucun tricycle disponible
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Les tricycles sont chargés depuis la base de données
+              </p>
             </div>
 
             {/* Adresse */}
