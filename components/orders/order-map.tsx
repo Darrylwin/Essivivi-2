@@ -32,7 +32,6 @@ export function CommandeMap({
       try {
         // Dynamic import de Leaflet pour éviter le SSR
         const L = await import("leaflet");
-        await import("leaflet/dist/leaflet.css");
 
         if (!mapInstanceRef.current) {
           // Initialize map

@@ -72,7 +72,6 @@ export function OrderTrackingMap({
       try {
         // Dynamic import de Leaflet pour éviter le SSR
         const L = await import("leaflet");
-        await import("leaflet/dist/leaflet.css");
 
         // Marquer comme initialisé immédiatement
         isInitializedRef.current = true;

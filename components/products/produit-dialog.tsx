@@ -84,7 +84,8 @@ export function ProductDialog({
       // Trouver la catégorie correspondante
       let categorieId = 0;
       if (product.categorie && categories?.results) {
-        const categorie = categories.results.find(cat => cat.nom === product.categorie!.nom);
+        // Since product.categorie is the ID (number), we need to find by ID
+        const categorie = categories.results.find(cat => cat.id === product.categorie);
         if (categorie) {
           categorieId = categorie.id;
         } else {

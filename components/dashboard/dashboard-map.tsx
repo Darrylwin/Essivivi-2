@@ -40,7 +40,6 @@ export function DashboardMap({
       try {
         // Charger Leaflet et son CSS
         const L = await import('leaflet');
-        await import('leaflet/dist/leaflet.css');
         
         // Sauvegarder dans window pour l'utiliser ailleurs
         window.L = L.default || L;
