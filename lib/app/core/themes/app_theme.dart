@@ -15,7 +15,7 @@ class AppTheme {
       brightness: Brightness.light,
 
       // Color Scheme
-      colorScheme: ColorScheme.light(
+      colorScheme: const ColorScheme.light(
         primary: AppColor.primary,
         primaryContainer: AppColor.primaryLight,
         secondary: AppColor.secondary,
@@ -34,13 +34,13 @@ class AppTheme {
       scaffoldBackgroundColor: AppColor.background,
 
       // AppBar
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: AppColor.primary,
         foregroundColor: AppColor.white,
         elevation: 0,
         centerTitle: true,
         systemOverlayStyle: SystemUiOverlayStyle.light,
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w600,
           color: AppColor.white,
@@ -306,7 +306,7 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
 
-      colorScheme: ColorScheme.dark(
+      colorScheme: const ColorScheme.dark(
         primary: AppColor.primaryLight,
         primaryContainer: AppColor.primary,
         secondary: AppColor.secondaryLight,
