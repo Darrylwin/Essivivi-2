@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Categorie, Produit
 import logging
+from django.urls import reverse
 
 logger = logging.getLogger('products')
 
@@ -46,29 +47,50 @@ class CategorieListSerializer(serializers.ModelSerializer):
 class ProduitListSerializer(serializers.ModelSerializer):
     """Serializer compact pour lister les produits"""
     categorie_nom = serializers.CharField(source='categorie.nom', read_only=True)
+    photo_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Produit
         fields = [
             'id', 'nom', 'marque', 'volume',
             'unite_vente', 'prix_unitaire', 'categorie',
-            'categorie_nom', 'actif'
+            'categorie_nom', 'actif', 'photo_url'
         ]
         read_only_fields = ['id']
+    
+    def get_photo_url(self, obj):
+        """Retourne l'URL complète de la photo"""
+        if obj.photo:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.photo.url)
+            return obj.photo.url
+        return None
 
 
 class ProduitDetailSerializer(serializers.ModelSerializer):
     """Serializer détaillé pour un produit"""
     categorie_detail = CategorieListSerializer(source='categorie', read_only=True)
+    photo_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Produit
         fields = [
             'id', 'nom', 'marque', 'volume',
-            'unite_vente', 'prix_unitaire', 'photo', 'categorie',
+            'unite_vente', 'prix_unitaire', 'photo_url', 'categorie',
             'categorie_detail', 'actif', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'photo_url']
+    
+    def get_photo_url(self, obj):
+        """Retourne l'URL complète de la photo"""
+        if obj.photo:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.photo.url)
+            return obj.photo.url
+        return None
+
 
 class ProduitCreateSerializer(serializers.ModelSerializer):
     """Serializer pour créer un produit"""
