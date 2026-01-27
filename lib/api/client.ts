@@ -6,7 +6,7 @@
  * Gère l'authentification, les headers et les erreurs
  * 
  * @module lib/api/client
- * @version 1.2 - Logging COMPLET des erreurs
+ * @version 1.3 - Correction des headers
  */
 
 export interface ApiResponse<T = unknown> {
@@ -127,12 +127,33 @@ export class ApiClient {
   private buildHeaders(body?: any, customHeaders?: HeadersInit): HeadersInit {
     const headers = new Headers(customHeaders);
     
-    // NE PAS définir Content-Type pour FormData
-    // FormData définira automatiquement son propre Content-Type avec boundary
-    const isFormData = body instanceof FormData;
+    // Détecter si le premier argument est en fait customHeaders (pour rétrocompatibilité)
+    if (body !== undefined && !(body instanceof FormData)) {
+      // Vérifier si c'est un Headers ou un objet de headers
+      if (body instanceof Headers || 
+          (typeof body === 'object' && body !== null && 
+           Object.keys(body).some(key => 
+             key.toLowerCase().includes('content') || 
+             key.toLowerCase().includes('authorization') ||
+             key.toLowerCase().includes('accept')))) {
+        // C'est probablement customHeaders qu'on a passé comme premier argument
+        customHeaders = body;
+        body = undefined;
+      }
+    }
     
-    if (!isFormData && !headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json");
+    // NE PAS définir Content-Type pour FormData
+    if (body !== undefined) {
+      const isFormData = body instanceof FormData;
+      
+      if (!isFormData && !headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
+    } else {
+      // Pas de body (GET, DELETE) ou body undefined
+      if (!headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
     }
 
     if (this.accessToken) {
@@ -223,7 +244,7 @@ export class ApiClient {
     try {
       const response = await fetch(url.toString(), {
         method: "GET",
-        headers: this.buildHeaders(customHeaders),
+        headers: this.buildHeaders(undefined, customHeaders),
       });
 
       return await this.handleResponse<T>('GET', endpoint, response, startTime);
@@ -257,7 +278,7 @@ export class ApiClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: "POST",
-        headers: this.buildHeaders(body, customHeaders), // Passez body ici
+        headers: this.buildHeaders(body, customHeaders),
         body: isFormData ? body : JSON.stringify(body),
       });
 
@@ -292,7 +313,7 @@ export class ApiClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: "PUT",
-        headers: this.buildHeaders(body, customHeaders), // Passez body ici
+        headers: this.buildHeaders(body, customHeaders),
         body: isFormData ? body : JSON.stringify(body),
       });
 
@@ -327,13 +348,13 @@ export class ApiClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: "PATCH",
-        headers: this.buildHeaders(body, customHeaders), // Passez body ici
+        headers: this.buildHeaders(body, customHeaders),
         body: isFormData ? body : JSON.stringify(body),
       });
 
       return await this.handleResponse<T>('PATCH', endpoint, response, startTime);
     } catch (error) {
-    if (error instanceof ApiError) throw error;
+      if (error instanceof ApiError) throw error;
       
       const apiError = new ApiError(
         `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -359,7 +380,7 @@ export class ApiClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: "DELETE",
-        headers: this.buildHeaders(customHeaders),
+        headers: this.buildHeaders(undefined, customHeaders),
       });
 
       return await this.handleResponse<T>('DELETE', endpoint, response, startTime);
