@@ -36,10 +36,12 @@ export interface ProduitListItem {
   categorie: number;
   categorie_nom: string;
   actif: boolean;
+  photo_url: string | null;
 }
 
 // ========== PRODUIT DETAIL ==========
 export interface ProduitDetail extends Produit {
+  photo_url: string | null;
   categorie_detail: {
     id: number;
     nom: string;

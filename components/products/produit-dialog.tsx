@@ -84,7 +84,6 @@ export function ProductDialog({
       // Trouver la catégorie correspondante
       let categorieId = 0;
       if (product.categorie && categories?.results) {
-        // Since product.categorie is the ID (number), we need to find by ID
         const categorie = categories.results.find(cat => cat.id === product.categorie);
         if (categorie) {
           categorieId = categorie.id;
@@ -102,7 +101,17 @@ export function ProductDialog({
         categorie_id: categorieId,
         actif: product.actif,
       });
-      setPhotoPreview(null);
+      
+      // Afficher la photo existante si disponible
+      if ((product as any).photo_url) {
+        setPhotoPreview((product as any).photo_url);
+      } else if (product.photo_url) {
+        // Fallback pour l'ancien champ photo (URL relative)
+        setPhotoPreview(product.photo_url);
+      } else {
+        setPhotoPreview(null);
+      }
+      
       setErrors({});
     } else if (open) {
       console.log('Initializing new product form');
@@ -199,12 +208,67 @@ export function ProductDialog({
     }
   };
 
+  const handleRemovePhoto = () => {
+    setPhoto(null);
+    setPhotoPreview(null);
+    // Pour supprimer une photo existante, vous pourriez vouloir passer un champ spécial
+    // Par exemple, apiData.remove_photo = true dans handleSubmit
+  };
+
   const unitOptions = [
     { value: "sachet", label: "Sachet" },
     { value: "bouteille", label: "Bouteille" },
     { value: "canette", label: "Canette" },
     { value: "pack", label: "Pack" },
   ];
+
+  // Détermine ce qu'il faut afficher pour la photo
+  const getPhotoDisplay = () => {
+    if (photoPreview) {
+      return (
+        <div className="relative group">
+          <div className="h-24 w-24 rounded-lg overflow-hidden border-2 border-primary">
+            <img
+              src={photoPreview}
+              alt="Preview"
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleRemovePhoto}
+              className="text-xs"
+            >
+              Supprimer
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    
+    if (product) {
+      return (
+        <div className="h-24 w-24 rounded-lg bg-muted flex items-center justify-center border">
+          {product.nom ? (
+            <span className="text-2xl font-bold">
+              {product.nom.charAt(0).toUpperCase()}
+            </span>
+          ) : (
+            <PackageIcon className="h-8 w-8 text-muted-foreground" />
+          )}
+        </div>
+      );
+    }
+    
+    return (
+      <div className="h-24 w-24 rounded-lg bg-muted flex items-center justify-center border-2 border-dashed">
+        <CameraIcon className="h-8 w-8 text-muted-foreground" />
+      </div>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -236,31 +300,9 @@ export function ProductDialog({
               </Label>
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  {photoPreview ? (
-                    <div className="h-24 w-24 rounded-lg overflow-hidden border-2 border-primary">
-                      <img
-                        src={photoPreview}
-                        alt="Preview"
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                  ) : product ? (
-                    <div className="h-24 w-24 rounded-lg bg-muted flex items-center justify-center border">
-                      {product.nom ? (
-                        <span className="text-2xl font-bold">
-                          {product.nom.charAt(0).toUpperCase()}
-                        </span>
-                      ) : (
-                        <PackageIcon className="h-8 w-8 text-muted-foreground" />
-                      )}
-                    </div>
-                  ) : (
-                    <div className="h-24 w-24 rounded-lg bg-muted flex items-center justify-center border-2 border-dashed">
-                      <CameraIcon className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  )}
+                  {getPhotoDisplay()}
                 </div>
-                <div>
+                <div className="flex flex-col gap-2">
                   <Input
                     id="photo"
                     type="file"
@@ -271,9 +313,19 @@ export function ProductDialog({
                   <Label htmlFor="photo" className="cursor-pointer">
                     <Button type="button" variant="outline" size="sm">
                       <CameraIcon className="mr-2 h-4 w-4" />
-                      {photo ? "Changer la photo" : "Ajouter une photo"}
+                      {photoPreview ? "Changer la photo" : "Ajouter une photo"}
                     </Button>
                   </Label>
+                  {photoPreview && product && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemovePhoto}
+                    >
+                      Supprimer la photo
+                    </Button>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">
                     JPEG, PNG ou WebP. Max 5MB.
                   </p>

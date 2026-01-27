@@ -99,6 +99,7 @@ export function useProducts(): UseProductsReturn {
             categorie: response.produit.categorie,
             categorie_nom: response.produit.categorie_detail.nom,
             actif: response.produit.actif,
+            photo_url: response.produit.photo_url,
           }]
         }));
       }
