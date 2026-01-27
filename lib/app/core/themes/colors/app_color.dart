@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Application color palette
+/// Application color palette - Thème ESSIVIVI (Eau)
 class AppColor {
-  // Prevent instantiation
   AppColor._();
 
   // =====================================================
@@ -23,7 +22,7 @@ class AppColor {
   // =====================================================
   // Accent Colors
   // =====================================================
-  static const Color accent = Color(0xFFFF9800); // Orange pour actions importantes
+  static const Color accent = Color(0xFFFF9800);
   static const Color accentLight = Color(0xFFFFB74D);
   static const Color accentDark = Color(0xFFF57C00);
 
@@ -49,11 +48,11 @@ class AppColor {
   // =====================================================
   // Order Status Colors
   // =====================================================
-  static const Color statusPending = Color(0xFFFF9800); // Orange
-  static const Color statusAssigned = Color(0xFF2196F3); // Bleu
-  static const Color statusInProgress = Color(0xFF9C27B0); // Violet
-  static const Color statusDelivered = Color(0xFF4CAF50); // Vert
-  static const Color statusCancelled = Color(0xFFE53935); // Rouge
+  static const Color statusPending = Color(0xFFFF9800);
+  static const Color statusAssigned = Color(0xFF2196F3);
+  static const Color statusInProgress = Color(0xFF9C27B0);
+  static const Color statusDelivered = Color(0xFF4CAF50);
+  static const Color statusCancelled = Color(0xFFE53935);
 
   // =====================================================
   // Neutral Colors
@@ -76,9 +75,7 @@ class AppColor {
   // Background Colors
   // =====================================================
   static const Color background = Color(0xFFF8F9FA);
-  static const Color backgroundDark = Color(0xFF1E1E1E);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceDark = Color(0xFF2C2C2C);
 
   // =====================================================
   // Text Colors
@@ -86,7 +83,6 @@ class AppColor {
   static const Color textPrimary = Color(0xFF212121);
   static const Color textSecondary = Color(0xFF757575);
   static const Color textDisabled = Color(0xFFBDBDBD);
-  static const Color textWhite = Color(0xFFFFFFFF);
   static const Color textHint = Color(0xFF9E9E9E);
 
   // =====================================================
@@ -100,20 +96,12 @@ class AppColor {
   // Divider Colors
   // =====================================================
   static const Color divider = Color(0xFFE0E0E0);
-  static const Color dividerLight = Color(0xFFF5F5F5);
 
   // =====================================================
   // Shadow Colors
   // =====================================================
   static const Color shadow = Color(0x1F000000);
   static const Color shadowLight = Color(0x0A000000);
-  static const Color shadowDark = Color(0x33000000);
-
-  // =====================================================
-  // Overlay Colors
-  // =====================================================
-  static const Color overlay = Color(0x80000000);
-  static const Color overlayLight = Color(0x40000000);
 
   // =====================================================
   // Gradient Colors
@@ -135,32 +123,4 @@ class AppColor {
     end: Alignment.bottomRight,
     colors: [success, successLight],
   );
-
-  // =====================================================
-  // Helper Methods
-  // =====================================================
-  
-  /// Get color based on order status
-  static Color getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return statusPending;
-      case 'assigned':
-        return statusAssigned;
-      case 'inprogress':
-      case 'in_progress':
-        return statusInProgress;
-      case 'delivered':
-        return statusDelivered;
-      case 'cancelled':
-        return statusCancelled;
-      default:
-        return grey500;
-    }
-  }
-
-  /// Get light version of status color (for backgrounds)
-  static Color getStatusColorLight(String status) {
-    return getStatusColor(status).withOpacity(0.1);
-  }
 }
