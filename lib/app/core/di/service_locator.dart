@@ -2,25 +2,18 @@ import 'package:get_it/get_it.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// auth imports
+// Auth imports
 import '../../features/auth/data/datasources/auth_remote_datasource.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/domain/usecases/login_usecase.dart';
-import '../../features/auth/domain/usecases/logout_usecase.dart';
+import '../../features/auth/domain/usecases/verify_otp_usecase.dart';
 import '../../features/auth/domain/usecases/get_current_user_usecase.dart';
+import '../../features/auth/domain/usecases/change_password_usecase.dart';
+import '../../features/auth/domain/usecases/logout_usecase.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
-
-// order imports
-// Imports
-import '../../features/order/data/datasources/order_remote_datasource.dart';
-import '../../features/order/data/repositories/order_repository_impl.dart';
-import '../../features/order/domain/repositories/order_repository.dart';
-import '../../features/order/domain/usecases/create_order_usecase.dart';
-import '../../features/order/domain/usecases/get_my_orders_usecase.dart';
-import '../../features/order/domain/usecases/get_order_details_usecase.dart';
-import '../../features/order/domain/usecases/get_assigned_orders_usecase.dart';
-import '../../features/order/presentation/bloc/order_bloc.dart';
+import 'register_usecase.dart';
+import 'resend_otp_usecase.dart';
 
 final sl = GetIt.instance;
 
@@ -34,7 +27,7 @@ Future<void> initDependencies() async {
   sl.registerLazySingleton<Dio>(() {
     final dio = Dio(
       BaseOptions(
-        baseUrl: 'http://127.0.0.1:8000/api', // TODO: Update with API URL
+        baseUrl: 'http://127.0.0.1:8000/api/v1',
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
         headers: {
@@ -66,10 +59,13 @@ Future<void> initDependencies() async {
           return handler.next(options);
         },
         onError: (error, handler) async {
-          // Handle 401 Unauthorized (logout user)
+          // Handle 401 Unauthorized (token expired)
           if (error.response?.statusCode == 401) {
             final prefs = sl<SharedPreferences>();
             await prefs.remove('auth_token');
+            await prefs.remove('refresh_token');
+            await prefs.remove('user_data');
+            await prefs.remove('user_type');
             // TODO: Navigate to login screen
           }
           return handler.next(error);
@@ -84,23 +80,31 @@ Future<void> initDependencies() async {
   final sharedPreferences = await SharedPreferences.getInstance();
   sl.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
 
-// =====================================================
-// Features - Auth
-// =====================================================
+  // =====================================================
+  // Features - Auth
+  // =====================================================
 
-// Bloc
+  // Bloc
   sl.registerFactory(() => AuthBloc(
         loginUseCase: sl(),
-        logoutUseCase: sl(),
+        verifyOtpUseCase: sl(),
+        registerUseCase: sl(),
+        resendOtpUseCase: sl(),
         getCurrentUserUseCase: sl(),
+        changePasswordUseCase: sl(),
+        logoutUseCase: sl(),
       ));
 
-// Use Cases
+  // Use Cases
   sl.registerLazySingleton(() => LoginUseCase(sl()));
-  sl.registerLazySingleton(() => LogoutUseCase(sl()));
+  sl.registerLazySingleton(() => VerifyOtpUseCase(sl()));
+  sl.registerLazySingleton(() => RegisterUseCase(sl()));
+  sl.registerLazySingleton(() => ResendOtpUseCase(sl()));
   sl.registerLazySingleton(() => GetCurrentUserUseCase(sl()));
+  sl.registerLazySingleton(() => ChangePasswordUseCase(sl()));
+  sl.registerLazySingleton(() => LogoutUseCase(sl()));
 
-// Repository
+  // Repository
   sl.registerLazySingleton<AuthRepository>(
     () => AuthRepositoryImpl(
       remoteDataSource: sl(),
@@ -108,42 +112,8 @@ Future<void> initDependencies() async {
     ),
   );
 
-// Data Source
+  // Data Source
   sl.registerLazySingleton<AuthRemoteDataSource>(
     () => AuthRemoteDataSourceImpl(dio: sl()),
   );
-
-// =====================================================
-// Features - Order
-// =====================================================
-
-// Bloc
-  sl.registerFactory(() => OrderBloc(
-        createOrderUseCase: sl(),
-        getMyOrdersUseCase: sl(),
-        getOrderDetailsUseCase: sl(),
-        getAssignedOrdersUseCase: sl(),
-      ));
-
-// Use Cases
-  sl.registerLazySingleton(() => CreateOrderUseCase(sl()));
-  sl.registerLazySingleton(() => GetMyOrdersUseCase(sl()));
-  sl.registerLazySingleton(() => GetOrderDetailsUseCase(sl()));
-  sl.registerLazySingleton(() => GetAssignedOrdersUseCase(sl()));
-
-// Repository
-  sl.registerLazySingleton<OrderRepository>(
-    () => OrderRepositoryImpl(remoteDataSource: sl()),
-  );
-
-// Data Source
-  sl.registerLazySingleton<OrderRemoteDataSource>(
-    () => OrderRemoteDataSourceImpl(dio: sl()),
-  );
-
-  // =====================================================
-  // Features - Delivery
-  // =====================================================
-
-  // TODO: Add delivery dependencies
 }

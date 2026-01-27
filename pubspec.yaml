@@ -1,6 +1,6 @@
 name: essivivi_mobile
-description: "A new Flutter project."
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+description: "Application mobile ESSIVIVI pour clients et agents de livraison"
+publish_to: 'none'
 
 version: 1.0.0+1
 
@@ -11,40 +11,46 @@ dependencies:
   flutter:
     sdk: flutter
 
-
+  # UI & Icons
   cupertino_icons: ^1.0.6
-  get_it: ^9.2.0
-  dio: ^5.9.0
-  shared_preferences: ^2.3.3
+
+  # State Management
+  flutter_bloc: ^9.1.1
   equatable: ^2.0.8
+
+  # Dependency Injection
+  get_it: ^9.2.0
+
+  # Network
+  dio: ^5.9.0
+
+  # Local Storage
+  shared_preferences: ^2.3.3
+
+  # Navigation
   go_router: ^15.1.2
+
+  # Utilities
   intl: ^0.20.2
   dartz: ^0.10.1
-  flutter_bloc: ^9.1.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^3.0.0
 
 flutter:
-
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
+  # Assets
   # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  #   - assets/images/
+  #   - assets/icons/
 
+  # Fonts
   # fonts:
-  #   - family: Schyler
+  #   - family: Poppins
   #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
-  #         style: italic
-  #   - family: Trajan Pro
-  #     fonts:
-  #       - asset: fonts/TrajanPro.ttf
-  #       - asset: fonts/TrajanPro_Bold.ttf
+  #       - asset: assets/fonts/Poppins-Regular.ttf
+  #       - asset: assets/fonts/Poppins-Bold.ttf
   #         weight: 700

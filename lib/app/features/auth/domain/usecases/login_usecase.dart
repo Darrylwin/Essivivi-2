@@ -1,46 +1,46 @@
 import 'package:dartz/dartz.dart';
 import '../../../../core/error/failures.dart';
-import '../entities/user.dart';
 import '../repositories/auth_repository.dart';
 
-/// Use case for user login
+/// Use case pour la connexion utilisateur (étape 1: envoi OTP)
 class LoginUseCase {
   final AuthRepository repository;
 
   LoginUseCase(this.repository);
 
-  /// Execute login
-  Future<Either<Failure, User>> call(LoginParams params) async {
-    // Validate inputs
-    if (params.identifier.isEmpty) {
-      return const Left(EmptyFieldFailure('Email/Téléphone requis'));
+  /// Execute login - envoie OTP
+  /// Returns Either<Failure, String> où String est l'email
+  Future<Either<Failure, String>> call(LoginParams params) async {
+    // Validation des inputs
+    if (params.email.trim().isEmpty) {
+      return const Left(EmptyFieldFailure('Email requis'));
     }
 
-    if (params.password.isEmpty) {
+    if (params.motDePasse.isEmpty) {
       return const Left(EmptyFieldFailure('Mot de passe requis'));
     }
 
-    if (params.password.length < 6) {
+    if (params.motDePasse.length < 6) {
       return const Left(
         ValidationFailure('Le mot de passe doit contenir au moins 6 caractères'),
       );
     }
 
-    // Call repository
+    // Appel au repository
     return await repository.login(
-      identifier: params.identifier,
-      password: params.password,
+      email: params.email.trim(),
+      motDePasse: params.motDePasse,
     );
   }
 }
 
-/// Login parameters
+/// Paramètres pour le login
 class LoginParams {
-  final String identifier; // Email or phone
-  final String password;
+  final String email;
+  final String motDePasse;
 
   LoginParams({
-    required this.identifier,
-    required this.password,
+    required this.email,
+    required this.motDePasse,
   });
 }
