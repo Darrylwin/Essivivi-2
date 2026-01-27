@@ -11,20 +11,38 @@ interface OrderTrackingMapProps {
   agentId?: number;
 }
 
+// Types pour Leaflet
+interface LeafletMap {
+  setView: (latlng: [number, number], zoom: number) => void;
+  remove: () => void;
+  fitBounds: (bounds: [[number, number], [number, number]], options?: { padding: [number, number] }) => void;
+}
+
+interface LeafletMarker {
+  remove: () => void;
+  bindPopup: (content: string) => LeafletMarker;
+  openPopup: () => void;
+}
+
+interface LeafletPolyline {
+  remove: () => void;
+}
+
 export function OrderTrackingMap({
   deliveryLocation,
   orderId,
   agentId,
 }: OrderTrackingMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [deliveryMarker, setDeliveryMarker] = useState<google.maps.Marker | null>(null);
-  const [agentMarker, setAgentMarker] = useState<google.maps.Marker | null>(null);
-  const [routeLine, setRouteLine] = useState<google.maps.Polyline | null>(null);
-  const [distance, setDistance] = useState<string | null>(null);
-  const [duration, setDuration] = useState<string | null>(null);
+  const mapInstanceRef = useRef<LeafletMap | null>(null);
+  const deliveryMarkerRef = useRef<LeafletMarker | null>(null);
+  const agentMarkerRef = useRef<LeafletMarker | null>(null);
+  const routeLineRef = useRef<LeafletPolyline | null>(null);
+  
   const [loading, setLoading] = useState(true);
   const [agentLocation, setAgentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [distance, setDistance] = useState<string | null>(null);
+  const [duration, setDuration] = useState<string | null>(null);
   
   const { fetchPositions, positions } = useTrackingDashboard();
 
@@ -61,172 +79,243 @@ export function OrderTrackingMap({
     }
   }, [positions]);
 
-  // Initialize map
+  // Initialize map with Leaflet
   useEffect(() => {
-    if (!mapRef.current || map) return;
+    if (!mapRef.current || mapInstanceRef.current) return;
 
-    const googleMap = new google.maps.Map(mapRef.current, {
-      center: deliveryLocation,
-      zoom: 13,
-      mapTypeControl: true,
-      streetViewControl: true,
-      fullscreenControl: true,
-      zoomControl: true,
-      styles: [
-        {
-          featureType: "poi",
-          elementType: "labels",
-          stylers: [{ visibility: "off" }],
-        },
-      ],
-    });
+    const loadMap = async () => {
+      try {
+        // Dynamic import de Leaflet pour éviter le SSR
+        const L = await import("leaflet");
+        await import("leaflet/dist/leaflet.css");
 
-    setMap(googleMap);
-    setLoading(false);
-  }, [deliveryLocation, map]);
+        // Fix for default marker icons in Leaflet
+        delete (L.Icon.Default.prototype as any)._getIconUrl;
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+          iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+        });
 
-  // Add/Update delivery marker
-  useEffect(() => {
-    if (!map) return;
+        // Initialize map
+        const map = L.map(mapRef.current!).setView(
+          [deliveryLocation.lat, deliveryLocation.lng],
+          13
+        );
 
-    if (deliveryMarker) {
-      deliveryMarker.setMap(null);
-    }
+        // Add tile layer (OpenStreetMap - gratuit)
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19,
+        }).addTo(map);
 
-    const marker = new google.maps.Marker({
-      position: deliveryLocation,
-      map,
-      title: "Point de livraison",
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 12,
-        fillColor: "#ef4444",
-        fillOpacity: 1,
-        strokeColor: "#ffffff",
-        strokeWeight: 3,
-      },
-      animation: google.maps.Animation.DROP,
-    });
+        mapInstanceRef.current = map as unknown as LeafletMap;
 
-    const infoWindow = new google.maps.InfoWindow({
-      content: `
-        <div style="padding: 8px;">
-          <h3 style="font-weight: bold; margin-bottom: 4px;">Point de livraison</h3>
-          <p style="color: #666; font-size: 12px;">Commande #${orderId}</p>
-          <p style="font-size: 12px; margin-top: 4px;">
-            ${deliveryLocation.lat.toFixed(6)}, ${deliveryLocation.lng.toFixed(6)}
-          </p>
-        </div>
-      `,
-    });
+        // Add delivery marker
+        const deliveryIcon = L.divIcon({
+          html: `
+            <div style="
+              background-color: #ef4444;
+              width: 30px;
+              height: 30px;
+              border-radius: 50% 50% 50% 0;
+              border: 3px solid white;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+              transform: rotate(-45deg);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            ">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2" style="transform: rotate(45deg);">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </div>
+          `,
+          className: "custom-marker",
+          iconSize: [30, 30],
+          iconAnchor: [15, 30],
+        });
 
-    marker.addListener("click", () => {
-      infoWindow.open(map, marker);
-    });
+        const deliveryMarker = L.marker(
+          [deliveryLocation.lat, deliveryLocation.lng],
+          { icon: deliveryIcon }
+        ).addTo(map);
 
-    setDeliveryMarker(marker);
+        deliveryMarker.bindPopup(`
+          <div style="padding: 8px; min-width: 200px;">
+            <h3 style="font-weight: bold; margin-bottom: 4px; color: #333;">Point de livraison</h3>
+            <p style="color: #666; font-size: 12px; margin-bottom: 4px;">Commande #${orderId}</p>
+            <p style="font-size: 11px; color: #999;">
+              ${deliveryLocation.lat.toFixed(6)}, ${deliveryLocation.lng.toFixed(6)}
+            </p>
+          </div>
+        `).openPopup();
 
-    // Auto-open info window
-    infoWindow.open(map, marker);
-  }, [map, deliveryLocation, orderId, deliveryMarker]);
+        deliveryMarkerRef.current = deliveryMarker as unknown as LeafletMarker;
+        setLoading(false);
+      } catch (error) {
+        console.error("Error loading map:", error);
+        setLoading(false);
+      }
+    };
+
+    loadMap();
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [deliveryLocation, orderId]);
 
   // Add/Update agent marker and route
   useEffect(() => {
-    if (!map || !agentLocation) return;
+    if (!mapInstanceRef.current || !agentLocation) return;
 
-    // Remove old agent marker
-    if (agentMarker) {
-      agentMarker.setMap(null);
-    }
+    const updateAgentMarker = async () => {
+      const L = await import("leaflet");
 
-    // Create agent marker
-    const marker = new google.maps.Marker({
-      position: agentLocation,
-      map,
-      title: "Position de l'agent",
-      icon: {
-        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-        scale: 6,
-        fillColor: "#3b82f6",
-        fillOpacity: 1,
-        strokeColor: "#ffffff",
-        strokeWeight: 2,
-        rotation: 0,
-      },
-      animation: google.maps.Animation.DROP,
-    });
+      // Remove old markers and route
+      if (agentMarkerRef.current) {
+        agentMarkerRef.current.remove();
+      }
+      if (routeLineRef.current) {
+        routeLineRef.current.remove();
+      }
 
-    const infoWindow = new google.maps.InfoWindow({
-      content: `
-        <div style="padding: 8px;">
-          <h3 style="font-weight: bold; margin-bottom: 4px;">Agent de livraison</h3>
-          <p style="font-size: 12px; margin-top: 4px;">
+      // Create agent marker icon
+      const agentIcon = L.divIcon({
+        html: `
+          <div style="
+            background-color: #3b82f6;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+          ">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2">
+              <path d="M5 17h14v2H5v-2zm7-12l6 7H6l6-7z"></path>
+            </svg>
+            <div style="
+              position: absolute;
+              top: -8px;
+              right: -8px;
+              width: 12px;
+              height: 12px;
+              background-color: #10b981;
+              border: 2px solid white;
+              border-radius: 50%;
+              animation: pulse 2s infinite;
+            "></div>
+          </div>
+          <style>
+            @keyframes pulse {
+              0%, 100% { opacity: 1; transform: scale(1); }
+              50% { opacity: 0.5; transform: scale(1.1); }
+            }
+          </style>
+        `,
+        className: "agent-marker",
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
+
+      const agentMarker = L.marker(
+        [agentLocation.lat, agentLocation.lng],
+        { icon: agentIcon }
+      ).addTo(mapInstanceRef.current as any);
+
+      agentMarker.bindPopup(`
+        <div style="padding: 8px; min-width: 180px;">
+          <h3 style="font-weight: bold; margin-bottom: 4px; color: #333;">Agent de livraison</h3>
+          <p style="font-size: 11px; color: #10b981; margin-bottom: 4px;">● En ligne</p>
+          <p style="font-size: 11px; color: #999;">
             ${agentLocation.lat.toFixed(6)}, ${agentLocation.lng.toFixed(6)}
           </p>
         </div>
-      `,
-    });
+      `);
 
-    marker.addListener("click", () => {
-      infoWindow.open(map, marker);
-    });
+      agentMarkerRef.current = agentMarker as unknown as LeafletMarker;
 
-    setAgentMarker(marker);
-
-    // Calculate and draw route
-    const directionsService = new google.maps.DirectionsService();
-    directionsService.route(
-      {
-        origin: agentLocation,
-        destination: deliveryLocation,
-        travelMode: google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK && result) {
-          // Remove old route
-          if (routeLine) {
-            routeLine.setMap(null);
-          }
-
-          // Draw new route
-          const path = result.routes[0].overview_path;
-          const polyline = new google.maps.Polyline({
-            path,
-            geodesic: true,
-            strokeColor: "#3b82f6",
-            strokeOpacity: 0.8,
-            strokeWeight: 4,
-            map,
-          });
-
-          setRouteLine(polyline);
-
-          // Extract distance and duration
-          const leg = result.routes[0].legs[0];
-          setDistance(leg.distance?.text || null);
-          setDuration(leg.duration?.text || null);
-
-          // Fit bounds to show both markers
-          const bounds = new google.maps.LatLngBounds();
-          bounds.extend(agentLocation);
-          bounds.extend(deliveryLocation);
-          map.fitBounds(bounds);
+      // Draw route line
+      const routeLine = L.polyline(
+        [
+          [agentLocation.lat, agentLocation.lng],
+          [deliveryLocation.lat, deliveryLocation.lng],
+        ],
+        {
+          color: '#3b82f6',
+          weight: 4,
+          opacity: 0.8,
+          dashArray: '10, 10',
         }
-      }
-    );
-  }, [map, agentLocation, deliveryLocation, agentMarker, routeLine]);
+      ).addTo(mapInstanceRef.current as any);
+
+      routeLineRef.current = routeLine as unknown as LeafletPolyline;
+
+      // Calculate distance using Haversine formula
+      const R = 6371; // Radius of the Earth in km
+      const dLat = (deliveryLocation.lat - agentLocation.lat) * Math.PI / 180;
+      const dLon = (deliveryLocation.lng - agentLocation.lng) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(agentLocation.lat * Math.PI / 180) * Math.cos(deliveryLocation.lat * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distanceKm = R * c;
+
+      setDistance(`${distanceKm.toFixed(2)} km`);
+      
+      // Estimate duration (assuming average speed of 30 km/h)
+      const durationMinutes = Math.round((distanceKm / 30) * 60);
+      setDuration(`${durationMinutes} min`);
+
+      // Fit bounds to show both markers
+      const bounds: [[number, number], [number, number]] = [
+        [
+          Math.min(agentLocation.lat, deliveryLocation.lat),
+          Math.min(agentLocation.lng, deliveryLocation.lng)
+        ],
+        [
+          Math.max(agentLocation.lat, deliveryLocation.lat),
+          Math.max(agentLocation.lng, deliveryLocation.lng)
+        ]
+      ];
+      
+      mapInstanceRef.current?.fitBounds(bounds, { padding: [50, 50] });
+    };
+
+    updateAgentMarker();
+  }, [agentLocation, deliveryLocation]);
 
   const handleCenterMap = () => {
-    if (!map) return;
+    if (!mapInstanceRef.current) return;
 
-    if (agentLocation && deliveryLocation) {
-      const bounds = new google.maps.LatLngBounds();
-      bounds.extend(agentLocation);
-      bounds.extend(deliveryLocation);
-      map.fitBounds(bounds);
+    if (agentLocation) {
+      const bounds: [[number, number], [number, number]] = [
+        [
+          Math.min(agentLocation.lat, deliveryLocation.lat),
+          Math.min(agentLocation.lng, deliveryLocation.lng)
+        ],
+        [
+          Math.max(agentLocation.lat, deliveryLocation.lat),
+          Math.max(agentLocation.lng, deliveryLocation.lng)
+        ]
+      ];
+      
+      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
     } else {
-      map.setCenter(deliveryLocation);
-      map.setZoom(13);
+      mapInstanceRef.current.setView(
+        [deliveryLocation.lat, deliveryLocation.lng],
+        13
+      );
     }
   };
 
@@ -265,7 +354,7 @@ export function OrderTrackingMap({
                   </div>
                   <div className="flex items-center gap-2">
                     <span>⏱️</span>
-                    <span>{duration}</span>
+                    <span>~{duration}</span>
                   </div>
                 </div>
               )}
@@ -309,31 +398,24 @@ export function OrderTrackingMap({
       {/* Legend */}
       <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-3 space-y-2">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-white" />
+          <div className="w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
           <span className="text-xs">Point de livraison</span>
         </div>
         {agentLocation && (
           <>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 border-2 border-white" style={{ clipPath: "polygon(50% 0%, 100% 100%, 0% 100%)" }} />
-              <span className="text-xs">Agent</span>
+              <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white relative">
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full border border-white"></div>
+              </div>
+              <span className="text-xs">Agent en ligne</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-0.5 bg-blue-500" />
-              <span className="text-xs">Itinéraire</span>
+              <div className="w-6 h-0.5 bg-blue-500 opacity-80" style={{ backgroundImage: 'repeating-linear-gradient(to right, #3b82f6 0, #3b82f6 10px, transparent 10px, transparent 20px)' }} />
+              <span className="text-xs">Itinéraire estimé</span>
             </div>
           </>
         )}
       </div>
     </div>
   );
-}
-
-// Add Google Maps script loader
-if (typeof window !== "undefined" && !window.google) {
-  const script = document.createElement("script");
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places,geometry`;
-  script.async = true;
-  script.defer = true;
-  document.head.appendChild(script);
 }
