@@ -4,6 +4,7 @@ import '../../features/auth/presentation/pages/login_screen.dart';
 import '../../features/auth/presentation/pages/otp_screen.dart';
 import '../../features/auth/presentation/pages/register_screen.dart';
 import '../../features/auth/presentation/pages/splash_screen.dart';
+import '../../features/order/presentation/pages/client_home_screen.dart';
 
 class AppRouter {
   static const String splash = '/';
@@ -62,7 +63,7 @@ class AppRouter {
         GoRoute(
           path: clientHome,
           name: 'clientHome',
-          builder: (context, state) => const Placeholder(), // TODO: ClientHomeScreen
+          builder: (context, state) => const ClientHomeScreen(),
         ),
 
         // =====================================================
