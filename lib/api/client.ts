@@ -64,59 +64,19 @@ export class ApiClient {
   /**
    * Log une réponse API
    */
-  private logResponse(method: string, endpoint: string, response: Response, data?: any, duration?: number) {
+  private logResponse(method: string, endpoint: string, response: Response | ApiError | null, data?: any, duration?: number) {
     if (!this.logEnabled) return;
     
     console.group(`📥 API Response: ${method} ${endpoint}`);
-    console.log('Status:', response.status, response.statusText);
+    if (response instanceof ApiError) {
+      console.log('Status:', response.status, response.message);
+    } else if (response) {
+      console.log('Status:', response.status, response.statusText);
+    } else {
+      console.log('Status: N/A');
+    }
     console.log('Duration:', duration ? `${duration}ms` : 'N/A');
     console.log('Response Data:', data);
-    console.groupEnd();
-  }
-
-  /**
-   * Log une erreur API - LOG TOUT LE BODY DE LA RÉPONSE
-   */
-  private logError(method: string, endpoint: string, error: any, responseData: any, duration?: number) {
-    console.group(`❌ API Error: ${method} ${endpoint}`);
-    console.error('Error Object:', error);
-    console.log('Duration:', duration ? `${duration}ms` : 'N/A');
-    console.log('========== RÉPONSE COMPLÈTE DE L\'ERREUR ==========');
-    console.log('Status:', error.status || 'N/A');
-    console.log('Code:', error.code || 'N/A');
-    console.log('Message:', error.message || 'N/A');
-    console.log('----------- CORPS COMPLET DE LA RÉPONSE -----------');
-    
-    // Afficher ABSOLUMENT TOUT le contenu de la réponse
-    if (typeof responseData === 'string') {
-      console.log('Type: String');
-      console.log('Contenu:', responseData);
-    } else if (typeof responseData === 'object' && responseData !== null) {
-      console.log('Type: Object');
-      
-      // Afficher TOUTES les propriétés
-      console.log('Toutes les propriétés:');
-      for (const key in responseData) {
-        console.log(`  ${key}:`, responseData[key]);
-      }
-      
-      // Afficher aussi les propriétés non-énumérables
-      console.log('Propriétés non-énumérables:');
-      console.log('  toString():', responseData.toString());
-      
-      // Si c'est un tableau, afficher tous les éléments
-      if (Array.isArray(responseData)) {
-        console.log('Tableau complet:');
-        responseData.forEach((item, index) => {
-          console.log(`  [${index}]:`, item);
-        });
-      }
-    } else {
-      console.log('Type:', typeof responseData);
-      console.log('Valeur:', responseData);
-    }
-    
-    console.log('=================================================');
     console.groupEnd();
   }
 
@@ -206,7 +166,7 @@ export class ApiClient {
         const errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         const error = new ApiError(errorMessage, response.status, data?.code, data);
         
-        this.logError(method, endpoint, error, data, duration);
+        this.logResponse(method, endpoint, response, data, duration);
         throw error;
       }
 
@@ -233,7 +193,7 @@ export class ApiClient {
         undefined,
         rawText || 'Impossible de lire la réponse'
       );
-      this.logError(method, endpoint, apiError, rawText || 'Pas de réponse', duration);
+      this.logResponse(method, endpoint, response, rawText || 'Pas de réponse', duration);
       throw apiError;
     }
   }
@@ -273,7 +233,7 @@ export class ApiClient {
         undefined,
         { networkError: true, originalError: error }
       );
-      this.logError('GET', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
+      this.logResponse('GET', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
       throw apiError;
     }
   }
@@ -308,7 +268,7 @@ export class ApiClient {
         undefined,
         { networkError: true, originalError: error }
       );
-      this.logError('POST', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
+      this.logResponse('POST', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
       throw apiError;
     }
   }
@@ -343,7 +303,7 @@ export class ApiClient {
         undefined,
         { networkError: true, originalError: error }
       );
-      this.logError('PUT', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
+      this.logResponse('PUT', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
       throw apiError;
     }
   }
@@ -378,7 +338,7 @@ export class ApiClient {
         undefined,
         { networkError: true, originalError: error }
       );
-      this.logError('PATCH', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
+      this.logResponse('PATCH', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
       throw apiError;
     }
   }
@@ -409,7 +369,7 @@ export class ApiClient {
         undefined,
         { networkError: true, originalError: error }
       );
-      this.logError('DELETE', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
+      this.logResponse('DELETE', endpoint, apiError, { networkError: true, originalError: error }, Date.now() - startTime);
       throw apiError;
     }
   }

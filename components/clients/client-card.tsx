@@ -139,17 +139,6 @@ export function ClientCard({
       {(onEdit || onDelete || onView) && (
         <CardFooter className="pt-3 border-t">
           <div className="flex w-full gap-2">
-            {onView && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="flex-1"
-                onClick={() => onView(client)}
-              >
-                <EyeIcon className="mr-2 h-3 w-3" />
-                Commandes
-              </Button>
-            )}
             {onEdit && (
               <Button 
                 variant="outline" 

@@ -121,6 +121,8 @@ export function useAgents(): UseAgentsReturn {
             prenom: response.agent.prenom,
             telephone: response.agent.telephone,
             email: response.agent.email,
+            adresse: response.agent.adresse, // Add this
+            date_naissance: response.agent.date_naissance, // Add this
             tricycle_plaque: response.agent.tricycle?.plaque_immatriculation ?? null,
             statut: response.agent.statut,
             created_at: response.agent.created_at,
@@ -255,42 +257,47 @@ export function useAgents(): UseAgentsReturn {
   }, [agent, agents]);
 
   const fetchTricycles = useCallback(async (): Promise<void> => {
-  setTricyclesLoading(true);
-  setTricyclesError(null);
-  
-  try {
-    const response = await tricyclesApi.list();
+    setTricyclesLoading(true);
+    setTricyclesError(null);
     
-    // Debug log - à garder temporairement
-    console.log('Tricycles API response:', response);
-    console.log('Response type:', typeof response);
-    
-    let tricyclesArray: Tricycle[] = [];
-    
-    // Format 1: Direct array
-    if (Array.isArray(response)) {
-      tricyclesArray = response;
-    }
-    // Format 2: Object avec pagination (tricyclesApi retourne probablement { results: [], count: X })
-    else if (response && typeof response === 'object') {
-      // Si l'API retourne { results: [], count: X }
-      if ('results' in response && Array.isArray(response.results)) {
-        tricyclesArray = response.results;
+    try {
+      const response = await tricyclesApi.list();
+      
+      // Debug log - à garder temporairement
+      console.log('Tricycles API response:', response);
+      console.log('Response type:', typeof response);
+      
+      let tricyclesArray: Tricycle[] = [];
+      
+      // Format 1: Direct array
+      if (Array.isArray(response)) {
+        tricyclesArray = response;
       }
+      // Format 2: Object avec pagination
+      else if (response && typeof response === 'object') {
+        // Utiliser une vérification plus stricte avec un type guard
+        const typedResponse = response as Record<string, any>;
+        if ('results' in typedResponse && Array.isArray(typedResponse.results)) {
+          tricyclesArray = typedResponse.results;
+        } 
+        // Si l'objet a déjà une structure de Tricycle mais pas dans 'results'
+        else if ('id' in typedResponse && 'plaque_immatriculation' in typedResponse) {
+          tricyclesArray = [typedResponse as Tricycle];
+        }
+      }
+      
+      console.log('Extracted tricycles array:', tricyclesArray);
+      setTricycles(tricyclesArray);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch tricycles";
+      setTricyclesError(errorMessage);
+      console.error('Error fetching tricycles:', err);
+      toast.error("Impossible de charger la liste des tricycles");
+      throw err;
+    } finally {
+      setTricyclesLoading(false);
     }
-    
-    console.log('Extracted tricycles array:', tricyclesArray);
-    setTricycles(tricyclesArray);
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Failed to fetch tricycles";
-    setTricyclesError(errorMessage);
-    console.error('Error fetching tricycles:', err);
-    toast.error("Impossible de charger la liste des tricycles");
-    throw err;
-  } finally {
-    setTricyclesLoading(false);
-  }
-}, []);
+  }, []);
 
   const fetchTricycle = useCallback(async (id: number): Promise<void> => {
     setTricyclesLoading(true);

@@ -502,34 +502,57 @@ export function ClientDialog({
 
             {/* Coordonnées GPS */}
             <div className="md:col-span-2">
-              <Label className="block mb-2">Coordonnées GPS</Label>
+              <Label className="block mb-2">
+              Coordonnées GPS
+              <span className="text-destructive ml-1">*</span>
+              </Label>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Input
-                    id="latitude"
-                    type="number"
-                    step="any"
-                    value={formData.latitude || ""}
-                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
-                    placeholder="Latitude (ex: 48.8566)"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Input
-                    id="longitude"
-                    type="number"
-                    step="any"
-                    value={formData.longitude || ""}
-                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
-                    placeholder="Longitude (ex: 2.3522)"
-                  />
-                </div>
+              <div className="space-y-2 relative">
+                <Input
+                id="latitude"
+                type="number"
+                step="any"
+                value={formData.latitude || ""}
+                onChange={(e) => setFormData({ ...formData, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                placeholder="Latitude (ex: 48.8566)"
+                className={errors.latitude ? "border-destructive pr-10" : "pr-10"}
+                />
+                {!errors.latitude && formData.latitude !== undefined && (
+                <CheckIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+                {errors.latitude && (
+                <p className="text-sm text-destructive flex items-center gap-1 mt-1">
+                  <AlertCircleIcon className="h-3 w-3" />
+                  {errors.latitude}
+                </p>
+                )}
+              </div>
+              <div className="space-y-2 relative">
+                <Input
+                id="longitude"
+                type="number"
+                step="any"
+                value={formData.longitude || ""}
+                onChange={(e) => setFormData({ ...formData, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                placeholder="Longitude (ex: 2.3522)"
+                className={errors.longitude ? "border-destructive pr-10" : "pr-10"}
+                />
+                {!errors.longitude && formData.longitude !== undefined && (
+                <CheckIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+                {errors.longitude && (
+                <p className="text-sm text-destructive flex items-center gap-1 mt-1">
+                  <AlertCircleIcon className="h-3 w-3" />
+                  {errors.longitude}
+                </p>
+                )}
+              </div>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Pour la géolocalisation des livraisons
+              Pour la géolocalisation des livraisons. Les deux champs sont requis.
               </p>
             </div>
-          </div>
+            </div>
           
           {client && (
             <Alert>

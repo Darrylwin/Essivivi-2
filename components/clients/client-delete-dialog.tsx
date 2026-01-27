@@ -182,25 +182,6 @@ export function ClientDeleteDialog({
             </div>
           </div>
           
-          {/* Warning Alerts */}
-          {hasOrders ? (
-            <Alert variant="destructive">
-              <AlertCircleIcon className="h-4 w-4" />
-              <AlertDescription className="font-medium">
-                Ce client a des commandes en cours. Veuillez d&apos;abord les traiter avant de supprimer le client.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <Alert variant="destructive">
-              <AlertCircleIcon className="h-4 w-4" />
-              <AlertDescription>
-                <div className="font-medium mb-1">Attention : Action irréversible</div>
-                La suppression d&apos;un client affectera toutes ses commandes, livraisons et historiques.
-                Cette action ne peut pas être annulée.
-              </AlertDescription>
-            </Alert>
-          )}
-          
           {/* Confirmation */}
           {!hasOrders && (
             <div className="space-y-3">
