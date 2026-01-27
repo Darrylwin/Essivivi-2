@@ -66,9 +66,16 @@ export class ProductsApi {
     if (data.volume) formData.append('volume', data.volume);
     formData.append('unite_vente', data.unite_vente);
     formData.append('prix_unitaire', data.prix_unitaire.toString());
-    if (data.photo) formData.append('photo', data.photo);
-    if (data.actif !== undefined) formData.append('actif', data.actif.toString());
-
+    
+    // Pour le champ actif, utilisez 'true' ou 'false'
+    formData.append('actif', data.actif !== undefined ? data.actif.toString() : 'true');
+    
+    // Ajoutez la photo seulement si elle existe
+    if (data.photo) {
+      formData.append('photo', data.photo);
+    }
+    
+    // Passez formData directement sans headers
     return this.client.post<ProduitCreateResponse>("/produits", formData);
   }
 
@@ -86,9 +93,13 @@ export class ProductsApi {
     if (data.volume !== undefined) formData.append('volume', data.volume || '');
     if (data.unite_vente) formData.append('unite_vente', data.unite_vente);
     if (data.prix_unitaire !== undefined) formData.append('prix_unitaire', data.prix_unitaire.toString());
-    if (data.photo) formData.append('photo', data.photo);
     if (data.actif !== undefined) formData.append('actif', data.actif.toString());
-
+    
+    // Ajoutez la photo seulement si elle existe
+    if (data.photo) {
+      formData.append('photo', data.photo);
+    }
+    
     return this.client.put<ProduitUpdateResponse>(`/produits/${id}`, formData);
   }
 

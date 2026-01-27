@@ -124,11 +124,14 @@ export class ApiClient {
   /**
    * Construit les headers pour les requêtes
    */
-  private buildHeaders(customHeaders?: HeadersInit): HeadersInit {
+  private buildHeaders(body?: any, customHeaders?: HeadersInit): HeadersInit {
     const headers = new Headers(customHeaders);
     
-    // Ne pas forcer Content-Type pour FormData
-    if (!headers.has("Content-Type") && !(customHeaders instanceof FormData)) {
+    // NE PAS définir Content-Type pour FormData
+    // FormData définira automatiquement son propre Content-Type avec boundary
+    const isFormData = body instanceof FormData;
+    
+    if (!isFormData && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
 
@@ -254,7 +257,7 @@ export class ApiClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: "POST",
-        headers: this.buildHeaders(customHeaders),
+        headers: this.buildHeaders(body, customHeaders), // Passez body ici
         body: isFormData ? body : JSON.stringify(body),
       });
 
@@ -289,7 +292,7 @@ export class ApiClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: "PUT",
-        headers: this.buildHeaders(customHeaders),
+        headers: this.buildHeaders(body, customHeaders), // Passez body ici
         body: isFormData ? body : JSON.stringify(body),
       });
 
@@ -324,13 +327,13 @@ export class ApiClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: "PATCH",
-        headers: this.buildHeaders(customHeaders),
+        headers: this.buildHeaders(body, customHeaders), // Passez body ici
         body: isFormData ? body : JSON.stringify(body),
       });
 
       return await this.handleResponse<T>('PATCH', endpoint, response, startTime);
     } catch (error) {
-      if (error instanceof ApiError) throw error;
+    if (error instanceof ApiError) throw error;
       
       const apiError = new ApiError(
         `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
