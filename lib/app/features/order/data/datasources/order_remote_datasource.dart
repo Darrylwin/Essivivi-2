@@ -1,25 +1,30 @@
 import 'package:dio/dio.dart';
 import '../models/order_model.dart';
+import '../models/product_model.dart';
+import '../../domain/repositories/order_repository.dart';
 
 /// Order remote data source interface
 abstract class OrderRemoteDataSource {
-  /// Create a new order
+  /// Get products list
+  Future<List<ProductModel>> getProducts();
+
+  /// Create order
   Future<OrderModel> createOrder({
-    required int quantity,
-    required String deliveryAddress,
-    required double latitude,
-    required double longitude,
-    DateTime? preferredDeliveryDate,
+    required double latitudeLivraison,
+    required double longitudeLivraison,
+    bool utiliserCoordonneesClient = false,
+    String? adresseTextuelle,
+    required List<OrderLineItem> lignes,
   });
 
-  /// Get orders for current user
+  /// Get my orders
   Future<List<OrderModel>> getMyOrders();
 
   /// Get order by ID
-  Future<OrderModel> getOrderById(String orderId);
+  Future<OrderModel> getOrderById(int orderId);
 
-  /// Get assigned orders (for agent)
-  Future<List<OrderModel>> getAssignedOrders();
+  /// Cancel order
+  Future<void> cancelOrder(int orderId);
 }
 
 /// Implementation of OrderRemoteDataSource
@@ -29,128 +34,121 @@ class OrderRemoteDataSourceImpl implements OrderRemoteDataSource {
   OrderRemoteDataSourceImpl({required this.dio});
 
   @override
+  Future<List<ProductModel>> getProducts() async {
+    try {
+      final response = await dio.get('/v1/produits');
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        
+        // API returns {count: X, results: [...]}
+        if (data is Map && data['results'] != null) {
+          final List<dynamic> productsJson = data['results'];
+          return productsJson.map((json) => ProductModel.fromJson(json)).toList();
+        }
+        
+        throw Exception('Format de réponse invalide');
+      } else {
+        throw Exception('Erreur lors de la récupération des produits');
+      }
+    } on DioException catch (e) {
+      _handleDioException(e);
+      rethrow;
+    }
+  }
+
+  @override
   Future<OrderModel> createOrder({
-    required int quantity,
-    required String deliveryAddress,
-    required double latitude,
-    required double longitude,
-    DateTime? preferredDeliveryDate,
+    required double latitudeLivraison,
+    required double longitudeLivraison,
+    bool utiliserCoordonneesClient = false,
+    String? adresseTextuelle,
+    required List<OrderLineItem> lignes,
   }) async {
     try {
-      final response = await dio.post(
-        '/orders',
-        data: {
-          'quantity': quantity,
-          'delivery_address': deliveryAddress,
-          'latitude': latitude,
-          'longitude': longitude,
-          if (preferredDeliveryDate != null)
-            'preferred_delivery_date': preferredDeliveryDate.toIso8601String(),
-        },
-      );
+      final data = {
+        'latitude_livraison': latitudeLivraison,
+        'longitude_livraison': longitudeLivraison,
+        'utiliser_coordonnees_client': utiliserCoordonneesClient,
+        'lignes': lignes.map((l) => l.toJson()).toList(),
+      };
+
+      if (adresseTextuelle != null && adresseTextuelle.isNotEmpty) {
+        data['adresse_textuelle'] = adresseTextuelle;
+      }
+
+      final response = await dio.post('/v1/orders', data: data);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = response.data;
-
-        // Expected API response:
-        // {
-        //   "success": true,
-        //   "data": { ... order object ... }
-        // }
-
-        if (data['success'] == true && data['data'] != null) {
-          return OrderModel.fromJson(data['data']);
-        } else {
-          throw Exception('Format de réponse invalide');
+        final responseData = response.data;
+        
+        // API returns {message: "...", commande: {...}}
+        if (responseData is Map && responseData['commande'] != null) {
+          return OrderModel.fromJson(responseData['commande']);
         }
+        
+        throw Exception('Format de réponse invalide');
       } else {
         throw Exception('Erreur lors de la création de la commande');
       }
     } on DioException catch (e) {
       _handleDioException(e);
       rethrow;
-    } catch (e) {
-      throw Exception('Une erreur inattendue s\'est produite');
     }
   }
 
   @override
   Future<List<OrderModel>> getMyOrders() async {
     try {
-      final response = await dio.get('/orders/my-orders');
+      final response = await dio.get('/v1/orders');
 
       if (response.statusCode == 200) {
         final data = response.data;
-
-        // Expected API response:
-        // {
-        //   "success": true,
-        //   "data": [ ... array of orders ... ]
-        // }
-
-        if (data['success'] == true && data['data'] != null) {
-          final List<dynamic> ordersJson = data['data'];
+        
+        // API returns {count: X, results: [...]}
+        if (data is Map && data['results'] != null) {
+          final List<dynamic> ordersJson = data['results'];
           return ordersJson.map((json) => OrderModel.fromJson(json)).toList();
-        } else {
-          throw Exception('Format de réponse invalide');
         }
+        
+        throw Exception('Format de réponse invalide');
       } else {
         throw Exception('Erreur lors de la récupération des commandes');
       }
     } on DioException catch (e) {
       _handleDioException(e);
       rethrow;
-    } catch (e) {
-      throw Exception('Une erreur inattendue s\'est produite');
     }
   }
 
   @override
-  Future<OrderModel> getOrderById(String orderId) async {
+  Future<OrderModel> getOrderById(int orderId) async {
     try {
-      final response = await dio.get('/orders/$orderId');
+      final response = await dio.get('/v1/orders/$orderId');
 
       if (response.statusCode == 200) {
-        final data = response.data;
-
-        if (data['success'] == true && data['data'] != null) {
-          return OrderModel.fromJson(data['data']);
-        } else {
-          throw Exception('Format de réponse invalide');
-        }
+        return OrderModel.fromJson(response.data);
       } else {
         throw Exception('Erreur lors de la récupération de la commande');
       }
     } on DioException catch (e) {
       _handleDioException(e);
       rethrow;
-    } catch (e) {
-      throw Exception('Une erreur inattendue s\'est produite');
     }
   }
 
   @override
-  Future<List<OrderModel>> getAssignedOrders() async {
+  Future<void> cancelOrder(int orderId) async {
     try {
-      final response = await dio.get('/orders/assigned');
+      // Assuming there's a cancel endpoint
+      final response = await dio.delete('/v1/orders/$orderId');
 
-      if (response.statusCode == 200) {
-        final data = response.data;
-
-        if (data['success'] == true && data['data'] != null) {
-          final List<dynamic> ordersJson = data['data'];
-          return ordersJson.map((json) => OrderModel.fromJson(json)).toList();
-        } else {
-          throw Exception('Format de réponse invalide');
-        }
-      } else {
-        throw Exception('Erreur lors de la récupération des commandes');
+      if (response.statusCode != 200) {
+        throw Exception('Erreur lors de l\'annulation de la commande');
       }
     } on DioException catch (e) {
       _handleDioException(e);
       rethrow;
-    } catch (e) {
-      throw Exception('Une erreur inattendue s\'est produite');
     }
   }
 
@@ -159,19 +157,27 @@ class OrderRemoteDataSourceImpl implements OrderRemoteDataSource {
   // =====================================================
 
   void _handleDioException(DioException e) {
-    if (e.response?.statusCode == 404) {
-      throw Exception('Ressource non trouvée');
+    if (e.response?.statusCode == 400) {
+      final errorData = e.response?.data;
+      if (errorData is Map) {
+        final message = errorData['error'] ?? errorData['detail'] ?? 'Validation échouée';
+        throw Exception(message);
+      }
+      throw Exception('Validation échouée');
     } else if (e.response?.statusCode == 401) {
       throw Exception('Non autorisé');
+    } else if (e.response?.statusCode == 404) {
+      throw Exception('Ressource non trouvée');
     } else if (e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout) {
       throw Exception('La requête a expiré');
     } else if (e.type == DioExceptionType.connectionError) {
       throw Exception('Pas de connexion internet');
     } else {
-      throw Exception(
-        e.response?.data['message'] ?? 'Erreur serveur',
-      );
+      final message = e.response?.data?['message'] ??
+          e.response?.data?['error'] ??
+          'Erreur serveur';
+      throw Exception(message);
     }
   }
 }

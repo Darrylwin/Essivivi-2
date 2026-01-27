@@ -3,48 +3,63 @@ import '../../../../core/error/failures.dart';
 import '../entities/order.dart';
 import '../repositories/order_repository.dart';
 
-/// Use case for creating a new order (Client)
+/// Use case pour créer une commande
 class CreateOrderUseCase {
   final OrderRepository repository;
 
   CreateOrderUseCase(this.repository);
 
+  /// Execute create order
   Future<Either<Failure, Order>> call(CreateOrderParams params) async {
-    // Validate inputs
-    if (params.quantity <= 0) {
-      return const Left(
-        ValidationFailure('La quantité doit être supérieure à 0'),
-      );
+    // Validation
+    if (params.lignes.isEmpty) {
+      return const Left(ValidationFailure('Au moins un produit requis'));
     }
 
-    if (params.deliveryAddress.isEmpty) {
-      return const Left(EmptyFieldFailure('Adresse de livraison requise'));
+    for (var ligne in params.lignes) {
+      if (ligne.quantite <= 0) {
+        return const Left(ValidationFailure('La quantité doit être supérieure à 0'));
+      }
+    }
+
+    if (!params.utiliserCoordonneesClient) {
+      if (params.latitudeLivraison == null || params.longitudeLivraison == null) {
+        return const Left(ValidationFailure('Coordonnées GPS requises'));
+      }
+
+      // Validate GPS coordinates
+      if (params.latitudeLivraison! < -90 || params.latitudeLivraison! > 90) {
+        return const Left(ValidationFailure('Latitude invalide (-90 à 90)'));
+      }
+      if (params.longitudeLivraison! < -180 || params.longitudeLivraison! > 180) {
+        return const Left(ValidationFailure('Longitude invalide (-180 à 180)'));
+      }
     }
 
     // Call repository
     return await repository.createOrder(
-      quantity: params.quantity,
-      deliveryAddress: params.deliveryAddress,
-      latitude: params.latitude,
-      longitude: params.longitude,
-      preferredDeliveryDate: params.preferredDeliveryDate,
+      latitudeLivraison: params.latitudeLivraison ?? 0.0,
+      longitudeLivraison: params.longitudeLivraison ?? 0.0,
+      utiliserCoordonneesClient: params.utiliserCoordonneesClient,
+      adresseTextuelle: params.adresseTextuelle,
+      lignes: params.lignes,
     );
   }
 }
 
-/// Create order parameters
+/// Paramètres pour créer une commande
 class CreateOrderParams {
-  final int quantity;
-  final String deliveryAddress;
-  final double latitude;
-  final double longitude;
-  final DateTime? preferredDeliveryDate;
+  final double? latitudeLivraison;
+  final double? longitudeLivraison;
+  final bool utiliserCoordonneesClient;
+  final String? adresseTextuelle;
+  final List<OrderLineItem> lignes;
 
   CreateOrderParams({
-    required this.quantity,
-    required this.deliveryAddress,
-    required this.latitude,
-    required this.longitude,
-    this.preferredDeliveryDate,
+    this.latitudeLivraison,
+    this.longitudeLivraison,
+    this.utiliserCoordonneesClient = false,
+    this.adresseTextuelle,
+    required this.lignes,
   });
 }

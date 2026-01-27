@@ -5,42 +5,50 @@ class OrderModel extends Order {
   const OrderModel({
     required super.id,
     required super.clientId,
-    required super.clientName,
-    required super.clientPhone,
-    required super.deliveryAddress,
-    required super.latitude,
-    required super.longitude,
-    required super.quantityOrdered,
-    required super.quantityDelivered,
-    required super.status,
-    super.assignedAgentId,
-    super.assignedAgentName,
+    required super.clientCode,
+    required super.clientNom,
+    super.agentId,
+    super.agentNumero,
+    super.agentNom,
+    required super.lignes,
+    required super.quantiteTotale,
+    required super.montantTotal,
+    required super.latitudeLivraison,
+    required super.longitudeLivraison,
+    super.adresseTextuelle,
+    required super.statut,
+    required super.estAssignee,
     required super.createdAt,
-    super.preferredDeliveryDate,
     super.updatedAt,
   });
 
   /// Create OrderModel from JSON
   factory OrderModel.fromJson(Map<String, dynamic> json) {
+    // Parse lignes
+    final lignesJson = json['lignes'] as List<dynamic>? ?? [];
+    final lignes = lignesJson
+        .map((ligneJson) => LigneCommandeModel.fromJson(ligneJson))
+        .toList();
+
     return OrderModel(
-      id: json['id']?.toString() ?? '',
-      clientId: json['client_id']?.toString() ?? '',
-      clientName: json['client_name'] ?? '',
-      clientPhone: json['client_phone'] ?? '',
-      deliveryAddress: json['delivery_address'] ?? '',
-      latitude: (json['latitude'] ?? 0).toDouble(),
-      longitude: (json['longitude'] ?? 0).toDouble(),
-      quantityOrdered: json['quantity_ordered'] ?? 0,
-      quantityDelivered: json['quantity_delivered'] ?? 0,
-      status: orderStatusFromString(json['status'] ?? 'pending'),
-      assignedAgentId: json['assigned_agent_id']?.toString(),
-      assignedAgentName: json['assigned_agent_name'],
+      id: json['id'] ?? 0,
+      clientId: json['client'] ?? 0,
+      clientCode: json['client_code'] ?? '',
+      clientNom: json['client_nom'] ?? '',
+      agentId: json['agent'],
+      agentNumero: json['agent_numero'],
+      agentNom: json['agent_nom'],
+      lignes: lignes,
+      quantiteTotale: json['quantite_totale'] ?? 0,
+      montantTotal: double.tryParse(json['montant_total']?.toString() ?? '0') ?? 0.0,
+      latitudeLivraison: double.tryParse(json['latitude_livraison']?.toString() ?? '0') ?? 0.0,
+      longitudeLivraison: double.tryParse(json['longitude_livraison']?.toString() ?? '0') ?? 0.0,
+      adresseTextuelle: json['adresse_textuelle'],
+      statut: orderStatusFromString(json['statut'] ?? 'en_attente'),
+      estAssignee: json['est_assignee'] ?? false,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
-      preferredDeliveryDate: json['preferred_delivery_date'] != null
-          ? DateTime.parse(json['preferred_delivery_date'])
-          : null,
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
@@ -51,100 +59,69 @@ class OrderModel extends Order {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'client_id': clientId,
-      'client_name': clientName,
-      'client_phone': clientPhone,
-      'delivery_address': deliveryAddress,
-      'latitude': latitude,
-      'longitude': longitude,
-      'quantity_ordered': quantityOrdered,
-      'quantity_delivered': quantityDelivered,
-      'status': statusString,
-      'assigned_agent_id': assignedAgentId,
-      'assigned_agent_name': assignedAgentName,
+      'client': clientId,
+      'client_code': clientCode,
+      'client_nom': clientNom,
+      'agent': agentId,
+      'agent_numero': agentNumero,
+      'agent_nom': agentNom,
+      'lignes': lignes.map((l) => (l as LigneCommandeModel).toJson()).toList(),
+      'quantite_totale': quantiteTotale,
+      'montant_total': montantTotal.toString(),
+      'latitude_livraison': latitudeLivraison.toString(),
+      'longitude_livraison': longitudeLivraison.toString(),
+      'adresse_textuelle': adresseTextuelle,
+      'statut': orderStatusToString(statut),
+      'est_assignee': estAssignee,
       'created_at': createdAt.toIso8601String(),
-      'preferred_delivery_date': preferredDeliveryDate?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };
   }
+}
 
-  /// Create OrderModel from Order entity
-  factory OrderModel.fromEntity(Order order) {
-    return OrderModel(
-      id: order.id,
-      clientId: order.clientId,
-      clientName: order.clientName,
-      clientPhone: order.clientPhone,
-      deliveryAddress: order.deliveryAddress,
-      latitude: order.latitude,
-      longitude: order.longitude,
-      quantityOrdered: order.quantityOrdered,
-      quantityDelivered: order.quantityDelivered,
-      status: order.status,
-      assignedAgentId: order.assignedAgentId,
-      assignedAgentName: order.assignedAgentName,
-      createdAt: order.createdAt,
-      preferredDeliveryDate: order.preferredDeliveryDate,
-      updatedAt: order.updatedAt,
+/// LigneCommande model
+class LigneCommandeModel extends LigneCommande {
+  const LigneCommandeModel({
+    required super.id,
+    required super.produitId,
+    required super.produitNom,
+    required super.produitMarque,
+    required super.produitVolume,
+    required super.quantite,
+    required super.prixUnitaire,
+    required super.montant,
+  });
+
+  /// Create from JSON
+  factory LigneCommandeModel.fromJson(Map<String, dynamic> json) {
+    // Handle nested produit_detail
+    final produitDetail = json['produit_detail'] as Map<String, dynamic>?;
+
+    return LigneCommandeModel(
+      id: json['id'] ?? 0,
+      produitId: json['produit'] ?? 0,
+      produitNom: produitDetail?['nom'] ?? '',
+      produitMarque: produitDetail?['marque'] ?? '',
+      produitVolume: produitDetail?['volume'] ?? '',
+      quantite: json['quantite'] ?? 0,
+      prixUnitaire: double.tryParse(json['prix_unitaire']?.toString() ?? '0') ?? 0.0,
+      montant: double.tryParse(json['montant']?.toString() ?? '0') ?? 0.0,
     );
   }
 
-  /// Convert to Order entity
-  Order toEntity() {
-    return Order(
-      id: id,
-      clientId: clientId,
-      clientName: clientName,
-      clientPhone: clientPhone,
-      deliveryAddress: deliveryAddress,
-      latitude: latitude,
-      longitude: longitude,
-      quantityOrdered: quantityOrdered,
-      quantityDelivered: quantityDelivered,
-      status: status,
-      assignedAgentId: assignedAgentId,
-      assignedAgentName: assignedAgentName,
-      createdAt: createdAt,
-      preferredDeliveryDate: preferredDeliveryDate,
-      updatedAt: updatedAt,
-    );
-  }
-
-  /// CopyWith method
-  OrderModel copyWith({
-    String? id,
-    String? clientId,
-    String? clientName,
-    String? clientPhone,
-    String? deliveryAddress,
-    double? latitude,
-    double? longitude,
-    int? quantityOrdered,
-    int? quantityDelivered,
-    OrderStatus? status,
-    String? assignedAgentId,
-    String? assignedAgentName,
-    DateTime? createdAt,
-    DateTime? preferredDeliveryDate,
-    DateTime? updatedAt,
-  }) {
-    return OrderModel(
-      id: id ?? this.id,
-      clientId: clientId ?? this.clientId,
-      clientName: clientName ?? this.clientName,
-      clientPhone: clientPhone ?? this.clientPhone,
-      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
-      latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude,
-      quantityOrdered: quantityOrdered ?? this.quantityOrdered,
-      quantityDelivered: quantityDelivered ?? this.quantityDelivered,
-      status: status ?? this.status,
-      assignedAgentId: assignedAgentId ?? this.assignedAgentId,
-      assignedAgentName: assignedAgentName ?? this.assignedAgentName,
-      createdAt: createdAt ?? this.createdAt,
-      preferredDeliveryDate:
-          preferredDeliveryDate ?? this.preferredDeliveryDate,
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
+  /// Convert to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'produit': produitId,
+      'produit_detail': {
+        'nom': produitNom,
+        'marque': produitMarque,
+        'volume': produitVolume,
+      },
+      'quantite': quantite,
+      'prix_unitaire': prixUnitaire.toString(),
+      'montant': montant.toString(),
+    };
   }
 }

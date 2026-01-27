@@ -1,6 +1,7 @@
 import 'package:dartz/dartz.dart' hide Order;
 import '../../../../core/error/failures.dart';
 import '../../domain/entities/order.dart';
+import '../../domain/entities/product.dart';
 import '../../domain/repositories/order_repository.dart';
 import '../datasources/order_remote_datasource.dart';
 
@@ -11,22 +12,31 @@ class OrderRepositoryImpl implements OrderRepository {
   OrderRepositoryImpl({required this.remoteDataSource});
 
   @override
+  Future<Either<Failure, List<Product>>> getProducts() async {
+    try {
+      final products = await remoteDataSource.getProducts();
+      return Right(products);
+    } on Exception catch (e) {
+      return Left(_mapExceptionToFailure(e));
+    }
+  }
+
+  @override
   Future<Either<Failure, Order>> createOrder({
-    required int quantity,
-    required String deliveryAddress,
-    required double latitude,
-    required double longitude,
-    DateTime? preferredDeliveryDate,
+    required double latitudeLivraison,
+    required double longitudeLivraison,
+    bool utiliserCoordonneesClient = false,
+    String? adresseTextuelle,
+    required List<OrderLineItem> lignes,
   }) async {
     try {
       final order = await remoteDataSource.createOrder(
-        quantity: quantity,
-        deliveryAddress: deliveryAddress,
-        latitude: latitude,
-        longitude: longitude,
-        preferredDeliveryDate: preferredDeliveryDate,
+        latitudeLivraison: latitudeLivraison,
+        longitudeLivraison: longitudeLivraison,
+        utiliserCoordonneesClient: utiliserCoordonneesClient,
+        adresseTextuelle: adresseTextuelle,
+        lignes: lignes,
       );
-
       return Right(order);
     } on Exception catch (e) {
       return Left(_mapExceptionToFailure(e));
@@ -44,7 +54,7 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
-  Future<Either<Failure, Order>> getOrderById(String orderId) async {
+  Future<Either<Failure, Order>> getOrderById(int orderId) async {
     try {
       final order = await remoteDataSource.getOrderById(orderId);
       return Right(order);
@@ -54,10 +64,10 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
-  Future<Either<Failure, List<Order>>> getAssignedOrders() async {
+  Future<Either<Failure, void>> cancelOrder(int orderId) async {
     try {
-      final orders = await remoteDataSource.getAssignedOrders();
-      return Right(orders);
+      await remoteDataSource.cancelOrder(orderId);
+      return const Right(null);
     } on Exception catch (e) {
       return Left(_mapExceptionToFailure(e));
     }
@@ -78,8 +88,9 @@ class OrderRepositoryImpl implements OrderRepository {
       return const UnauthorizedFailure();
     } else if (message.contains('non trouvée')) {
       return NotFoundFailure(message);
-    } else if (message.contains('Format de réponse invalide')) {
-      return ServerFailure(message);
+    } else if (message.contains('Validation échouée') ||
+        message.contains('invalide')) {
+      return ValidationFailure(message);
     } else {
       return ServerFailure(message);
     }

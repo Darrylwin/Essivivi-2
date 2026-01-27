@@ -15,6 +15,16 @@ import '../../features/auth/domain/usecases/change_password_usecase.dart';
 import '../../features/auth/domain/usecases/logout_usecase.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 
+// Order imports
+import '../../features/order/data/datasources/order_remote_datasource.dart';
+import '../../features/order/data/repositories/order_repository_impl.dart';
+import '../../features/order/domain/repositories/order_repository.dart';
+import '../../features/order/domain/usecases/get_products_usecase.dart';
+import '../../features/order/domain/usecases/create_order_usecase.dart';
+import '../../features/order/domain/usecases/get_my_orders_usecase.dart';
+import '../../features/order/domain/usecases/get_order_details_usecase.dart';
+import '../../features/order/presentation/bloc/order_bloc.dart';
+
 final sl = GetIt.instance;
 
 /// Initialize all dependencies
@@ -27,7 +37,7 @@ Future<void> initDependencies() async {
   sl.registerLazySingleton<Dio>(() {
     final dio = Dio(
       BaseOptions(
-        baseUrl: 'http://127.0.0.1:8000/api',
+        baseUrl: 'http://127.0.0.1:8000/api', // TODO: Update with production URL
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
         headers: {
@@ -115,5 +125,33 @@ Future<void> initDependencies() async {
   // Data Source
   sl.registerLazySingleton<AuthRemoteDataSource>(
     () => AuthRemoteDataSourceImpl(dio: sl()),
+  );
+
+  // =====================================================
+  // Features - Order
+  // =====================================================
+
+  // Bloc
+  sl.registerFactory(() => OrderBloc(
+        getProductsUseCase: sl(),
+        createOrderUseCase: sl(),
+        getMyOrdersUseCase: sl(),
+        getOrderDetailsUseCase: sl(),
+      ));
+
+  // Use Cases
+  sl.registerLazySingleton(() => GetProductsUseCase(sl()));
+  sl.registerLazySingleton(() => CreateOrderUseCase(sl()));
+  sl.registerLazySingleton(() => GetMyOrdersUseCase(sl()));
+  sl.registerLazySingleton(() => GetOrderDetailsUseCase(sl()));
+
+  // Repository
+  sl.registerLazySingleton<OrderRepository>(
+    () => OrderRepositoryImpl(remoteDataSource: sl()),
+  );
+
+  // Data Source
+  sl.registerLazySingleton<OrderRemoteDataSource>(
+    () => OrderRemoteDataSourceImpl(dio: sl()),
   );
 }

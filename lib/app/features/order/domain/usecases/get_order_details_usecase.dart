@@ -3,14 +3,15 @@ import '../../../../core/error/failures.dart';
 import '../entities/order.dart';
 import '../repositories/order_repository.dart';
 
-/// Use case to get order details by ID
+/// Use case pour récupérer les détails d'une commande
 class GetOrderDetailsUseCase {
   final OrderRepository repository;
 
   GetOrderDetailsUseCase(this.repository);
 
-  Future<Either<Failure, Order>> call(String orderId) async {
-    if (orderId.isEmpty) {
+  /// Execute get order details
+  Future<Either<Failure, Order>> call(int orderId) async {
+    if (orderId <= 0) {
       return const Left(ValidationFailure('ID de commande invalide'));
     }
 
