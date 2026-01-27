@@ -4,28 +4,12 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { MapPinIcon, TruckIcon, NavigationIcon, RefreshCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTrackingDashboard } from "@/lib/hooks/useTrackingDashboard";
+import type { Map as LeafletMapType, Marker, Polyline, DivIcon } from "leaflet";
 
 interface OrderTrackingMapProps {
   deliveryLocation: { lat: number; lng: number };
   orderId: number;
   agentId?: number;
-}
-
-// Types pour Leaflet
-interface LeafletMap {
-  setView: (latlng: [number, number], zoom: number) => void;
-  remove: () => void;
-  fitBounds: (bounds: [[number, number], [number, number]], options?: { padding: [number, number] }) => void;
-}
-
-interface LeafletMarker {
-  remove: () => void;
-  bindPopup: (content: string) => LeafletMarker;
-  openPopup: () => void;
-}
-
-interface LeafletPolyline {
-  remove: () => void;
 }
 
 export function OrderTrackingMap({
@@ -34,10 +18,11 @@ export function OrderTrackingMap({
   agentId,
 }: OrderTrackingMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<LeafletMap | null>(null);
-  const deliveryMarkerRef = useRef<LeafletMarker | null>(null);
-  const agentMarkerRef = useRef<LeafletMarker | null>(null);
-  const routeLineRef = useRef<LeafletPolyline | null>(null);
+  const mapInstanceRef = useRef<LeafletMapType | null>(null);
+  const deliveryMarkerRef = useRef<Marker | null>(null);
+  const agentMarkerRef = useRef<Marker | null>(null);
+  const routeLineRef = useRef<Polyline | null>(null);
+  const isInitializedRef = useRef(false);
   
   const [loading, setLoading] = useState(true);
   const [agentLocation, setAgentLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -81,7 +66,7 @@ export function OrderTrackingMap({
 
   // Initialize map with Leaflet
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    if (!mapRef.current || isInitializedRef.current) return;
 
     const loadMap = async () => {
       try {
@@ -89,8 +74,13 @@ export function OrderTrackingMap({
         const L = await import("leaflet");
         await import("leaflet/dist/leaflet.css");
 
+        // Marquer comme initialisé immédiatement
+        isInitializedRef.current = true;
+
         // Fix for default marker icons in Leaflet
-        delete (L.Icon.Default.prototype as any)._getIconUrl;
+        const iconDefault = L.Icon.Default.prototype as unknown as { _getIconUrl?: () => void };
+        delete iconDefault._getIconUrl;
+        
         L.Icon.Default.mergeOptions({
           iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
           iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
@@ -109,10 +99,10 @@ export function OrderTrackingMap({
           maxZoom: 19,
         }).addTo(map);
 
-        mapInstanceRef.current = map as unknown as LeafletMap;
+        mapInstanceRef.current = map;
 
         // Add delivery marker
-        const deliveryIcon = L.divIcon({
+        const deliveryIcon: DivIcon = L.divIcon({
           html: `
             <div style="
               background-color: #ef4444;
@@ -152,7 +142,7 @@ export function OrderTrackingMap({
           </div>
         `).openPopup();
 
-        deliveryMarkerRef.current = deliveryMarker as unknown as LeafletMarker;
+        deliveryMarkerRef.current = deliveryMarker;
         setLoading(false);
       } catch (error) {
         console.error("Error loading map:", error);
@@ -166,6 +156,7 @@ export function OrderTrackingMap({
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        isInitializedRef.current = false;
       }
     };
   }, [deliveryLocation, orderId]);
@@ -186,7 +177,7 @@ export function OrderTrackingMap({
       }
 
       // Create agent marker icon
-      const agentIcon = L.divIcon({
+      const agentIcon: DivIcon = L.divIcon({
         html: `
           <div style="
             background-color: #3b82f6;
@@ -230,7 +221,7 @@ export function OrderTrackingMap({
       const agentMarker = L.marker(
         [agentLocation.lat, agentLocation.lng],
         { icon: agentIcon }
-      ).addTo(mapInstanceRef.current as any);
+      ).addTo(mapInstanceRef.current!);
 
       agentMarker.bindPopup(`
         <div style="padding: 8px; min-width: 180px;">
@@ -242,7 +233,7 @@ export function OrderTrackingMap({
         </div>
       `);
 
-      agentMarkerRef.current = agentMarker as unknown as LeafletMarker;
+      agentMarkerRef.current = agentMarker;
 
       // Draw route line
       const routeLine = L.polyline(
@@ -256,9 +247,9 @@ export function OrderTrackingMap({
           opacity: 0.8,
           dashArray: '10, 10',
         }
-      ).addTo(mapInstanceRef.current as any);
+      ).addTo(mapInstanceRef.current!);
 
-      routeLineRef.current = routeLine as unknown as LeafletPolyline;
+      routeLineRef.current = routeLine;
 
       // Calculate distance using Haversine formula
       const R = 6371; // Radius of the Earth in km

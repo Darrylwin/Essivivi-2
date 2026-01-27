@@ -111,7 +111,10 @@ export function OrderTable({
         return (
           <Button
             variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            onClick={(e) => {
+              e.stopPropagation();
+              column.toggleSorting(column.getIsSorted() === "asc");
+            }}
             className="font-semibold hover:bg-transparent"
           >
             Client
@@ -171,7 +174,10 @@ export function OrderTable({
         return (
           <Button
             variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            onClick={(e) => {
+              e.stopPropagation();
+              column.toggleSorting(column.getIsSorted() === "asc");
+            }}
             className="font-semibold hover:bg-transparent"
           >
             Montant
@@ -205,7 +211,10 @@ export function OrderTable({
         return (
           <Button
             variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            onClick={(e) => {
+              e.stopPropagation();
+              column.toggleSorting(column.getIsSorted() === "asc");
+            }}
             className="font-semibold hover:bg-transparent"
           >
             Date création
@@ -239,7 +248,11 @@ export function OrderTable({
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button 
+                variant="ghost" 
+                className="h-8 w-8 p-0"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <span className="sr-only">Ouvrir le menu</span>
                 <MoreVerticalIcon className="h-4 w-4" />
               </Button>
@@ -247,19 +260,28 @@ export function OrderTable({
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onViewDetails(order)}>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails(order);
+              }}>
                 <EyeIcon className="mr-2 h-4 w-4" />
                 Voir détails
               </DropdownMenuItem>
               {!order.est_assignee && order.statut === 'en_attente' && (
-                <DropdownMenuItem onClick={() => onAssign(order)}>
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onAssign(order);
+                }}>
                   <UserPlusIcon className="mr-2 h-4 w-4" />
                   Assigner un agent
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => onDelete(order)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(order);
+                }}
                 className="text-destructive focus:text-destructive"
               >
                 <Trash2Icon className="mr-2 h-4 w-4" />
