@@ -36,7 +36,7 @@ class OrderRemoteDataSourceImpl implements OrderRemoteDataSource {
   @override
   Future<List<ProductModel>> getProducts() async {
     try {
-      final response = await dio.get('/v1/produits');
+      final response = await dio.get('/produits');
 
       if (response.statusCode == 200) {
         final data = response.data;
@@ -77,7 +77,7 @@ class OrderRemoteDataSourceImpl implements OrderRemoteDataSource {
         data['adresse_textuelle'] = adresseTextuelle;
       }
 
-      final response = await dio.post('/v1/orders', data: data);
+      final response = await dio.post('/orders', data: data);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = response.data;
@@ -100,7 +100,7 @@ class OrderRemoteDataSourceImpl implements OrderRemoteDataSource {
   @override
   Future<List<OrderModel>> getMyOrders() async {
     try {
-      final response = await dio.get('/v1/orders');
+      final response = await dio.get('/orders');
 
       if (response.statusCode == 200) {
         final data = response.data;
@@ -124,7 +124,7 @@ class OrderRemoteDataSourceImpl implements OrderRemoteDataSource {
   @override
   Future<OrderModel> getOrderById(int orderId) async {
     try {
-      final response = await dio.get('/v1/orders/$orderId');
+      final response = await dio.get('/orders/$orderId');
 
       if (response.statusCode == 200) {
         return OrderModel.fromJson(response.data);
@@ -141,7 +141,7 @@ class OrderRemoteDataSourceImpl implements OrderRemoteDataSource {
   Future<void> cancelOrder(int orderId) async {
     try {
       // Assuming there's a cancel endpoint
-      final response = await dio.delete('/v1/orders/$orderId');
+      final response = await dio.delete('/orders/$orderId');
 
       if (response.statusCode != 200) {
         throw Exception('Erreur lors de l\'annulation de la commande');
