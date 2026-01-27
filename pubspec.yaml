@@ -34,6 +34,15 @@ dependencies:
   intl: ^0.20.2
   dartz: ^0.10.1
 
+  # GPS & Location
+  geolocator: ^11.0.0
+
+  # OTP Input
+  pin_code_fields: ^8.0.1
+
+  # Form validation
+  form_field_validator: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

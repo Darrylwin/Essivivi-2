@@ -1,7 +1,7 @@
 import 'package:dartz/dartz.dart';
 
-import '../../features/auth/domain/repositories/auth_repository.dart';
-import '../error/failures.dart';
+import '../repositories/auth_repository.dart';
+import '../../../../core/error/failures.dart';
 
 /// Use case pour renvoyer un code OTP
 class ResendOtpUseCase {

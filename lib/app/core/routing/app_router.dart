@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/auth/presentation/bloc/auth_bloc.dart';
+import '../../features/auth/presentation/bloc/auth_state.dart';
+import '../di/service_locator.dart' as di;
+
+// Import des pages d'authentification
+import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/auth/presentation/pages/otp_verification_page.dart';
+import '../../features/auth/presentation/pages/register_page.dart';
 
 // TODO: Import your screens when created
-// import 'package:your_app/features/auth/presentation/screens/login_screen.dart';
 // import 'package:your_app/features/order/presentation/screens/client/my_orders_screen.dart';
 // import 'package:your_app/features/order/presentation/screens/client/create_order_screen.dart';
 
 class AppRouter {
   static const String login = '/';
   static const String splash = '/splash';
+  static const String register = '/register';
+  static const String otpVerification = '/otp-verification';
   
   // Client routes
   static const String clientHome = '/client/home';
@@ -27,24 +36,32 @@ class AppRouter {
   /// Create the router configuration
   static GoRouter createRouter() {
     return GoRouter(
-      initialLocation: login,
+      initialLocation: splash,
       debugLogDiagnostics: true,
       
       // Redirect logic for authentication
       redirect: (BuildContext context, GoRouterState state) {
-        // TODO: Implement authentication check
-        // final isAuthenticated = checkIfUserIsAuthenticated();
-        // final isOnLoginPage = state.matchedLocation == login;
+        final authBloc = di.sl.get<AuthBloc>();
+        final authState = authBloc.state;
         
-        // if (!isAuthenticated && !isOnLoginPage) {
-        //   return login;
-        // }
+        // Routes qui ne nécessitent pas d'authentification
+        final publicRoutes = [login, register, otpVerification, splash];
+        final isPublicRoute = publicRoutes.contains(state.matchedLocation);
         
-        // if (isAuthenticated && isOnLoginPage) {
-        //   final userRole = getUserRole();
-        //   if (userRole == 'client') return clientHome;
-        //   if (userRole == 'agent') return agentHome;
-        // }
+        // Si l'utilisateur est authentifié et essaie d'accéder à une route publique
+        if (authState is AuthAuthenticated && isPublicRoute) {
+          // Rediriger selon le type d'utilisateur
+          if (authState.user.isClient) {
+            return clientHome;
+          } else if (authState.user.isAgent) {
+            return agentHome;
+          }
+        }
+        
+        // Si l'utilisateur n'est pas authentifié et essaie d'accéder à une route protégée
+        if (authState is! AuthAuthenticated && !isPublicRoute) {
+          return login;
+        }
         
         return null; // No redirect
       },
@@ -54,20 +71,40 @@ class AppRouter {
         // Auth Routes
         // =====================================================
         GoRoute(
-          path: login,
-          name: 'login',
+          path: splash,
+          name: 'splash',
           builder: (context, state) {
-            // TODO: Replace with your LoginScreen
-            return const Placeholder(); // LoginScreen();
+            // TODO: Create SplashScreen
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
           },
         ),
 
         GoRoute(
-          path: splash,
-          name: 'splash',
+          path: login,
+          name: 'login',
           builder: (context, state) {
-            // TODO: Replace with your SplashScreen
-            return const Placeholder(); // SplashScreen();
+            return const LoginPage();
+          },
+        ),
+
+        GoRoute(
+          path: register,
+          name: 'register',
+          builder: (context, state) {
+            return const RegisterPage();
+          },
+        ),
+
+        GoRoute(
+          path: otpVerification,
+          name: 'otpVerification',
+          builder: (context, state) {
+            final email = state.extra as String? ?? '';
+            return OTPVerificationPage(email: email);
           },
         ),
 
@@ -79,7 +116,10 @@ class AppRouter {
           name: 'clientHome',
           builder: (context, state) {
             // TODO: Replace with your ClientHomeScreen
-            return const Placeholder(); // ClientHomeScreen();
+            return Scaffold(
+              appBar: AppBar(title: const Text('Tableau de bord Client')),
+              body: const Center(child: Text('Interface Client')),
+            );
           },
         ),
 
@@ -107,7 +147,7 @@ class AppRouter {
           builder: (context, state) {
             final orderId = state.pathParameters['id']!;
             // TODO: Replace with your OrderDetailsScreen
-            return Placeholder(); // OrderDetailsScreen(orderId: orderId);
+            return const Placeholder(); // OrderDetailsScreen(orderId: orderId);
           },
         ),
 
@@ -128,7 +168,10 @@ class AppRouter {
           name: 'agentHome',
           builder: (context, state) {
             // TODO: Replace with your AgentHomeScreen
-            return const Placeholder(); // AgentHomeScreen();
+            return Scaffold(
+              appBar: AppBar(title: const Text('Tableau de bord Agent')),
+              body: const Center(child: Text('Interface Agent')),
+            );
           },
         ),
 
@@ -147,7 +190,7 @@ class AppRouter {
           builder: (context, state) {
             final orderId = state.pathParameters['orderId']!;
             // TODO: Replace with your RecordDeliveryScreen
-            return Placeholder(); // RecordDeliveryScreen(orderId: orderId);
+            return const Placeholder(); // RecordDeliveryScreen(orderId: orderId);
           },
         ),
 
@@ -173,7 +216,31 @@ class AppRouter {
       // Error page
       errorBuilder: (context, state) => Scaffold(
         body: Center(
-          child: Text('Page non trouvée: ${state.matchedLocation}'),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Page non trouvée',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                state.matchedLocation,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => context.go(login),
+                child: const Text('Retour à l\'accueil'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -183,6 +250,10 @@ class AppRouter {
 // Extension for easy navigation
 extension GoRouterExtension on BuildContext {
   void goToLogin() => go(AppRouter.login);
+  void goToRegister() => go(AppRouter.register);
+  void goToOtpVerification(String email) {
+    go(AppRouter.otpVerification, extra: email);
+  }
   void goToClientHome() => go(AppRouter.clientHome);
   void goToAgentHome() => go(AppRouter.agentHome);
   void goToMyOrders() => go(AppRouter.myOrders);

@@ -1,6 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../../core/di/register_usecase.dart';
-import '../../../../core/di/resend_otp_usecase.dart';
+import '../../domain/usecases/register_usecase.dart';
+import '../../domain/usecases/resend_otp_usecase.dart';
 import '../../domain/usecases/login_usecase.dart';
 import '../../domain/usecases/verify_otp_usecase.dart';
 import '../../domain/usecases/get_current_user_usecase.dart';
