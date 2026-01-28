@@ -21,156 +21,49 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost').split(',')
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+
     'formatters': {
         'verbose': {
-            'format': '[{levelname}] {asctime} {module} {process:d} {thread:d} - {message}',
+            'format': '{levelname} {asctime} {module} {message}',
             'style': '{',
         },
         'simple': {
-            'format': '[{levelname}] {asctime} - {message}',
+            'format': '{levelname} {message}',
             'style': '{',
         },
     },
-    'filters': {
-        'require_debug_true': {
-            '()': 'django.utils.log.RequireDebugTrue',
-        },
-    },
+
     'handlers': {
         'console': {
-            'level': 'INFO',
             'class': 'logging.StreamHandler',
-            'formatter': 'verbose'
-        },
-        'root_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'essivivi.log'),
-            'formatter': 'verbose',
-        },
-        'error_file': {
-            'level': 'ERROR',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'errors.log'),
-            'formatter': 'verbose',
-        },
-        'authentication_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'authentication.log'),
-            'formatter': 'verbose',
-        },
-        'users_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'users.log'),
-            'formatter': 'verbose',
-        },
-        'products_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'products.log'),
-            'formatter': 'verbose',
-        },
-        'tours_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'tours.log'),
-            'formatter': 'verbose',
-        },
-        'deliveries_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'deliveries.log'),
-            'formatter': 'verbose',
-        },
-        'orders_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'orders.log'),
-            'formatter': 'verbose',
-        },
-        'tracking_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'tracking.log'),
-            'formatter': 'verbose',
-        },
-        'dashboard_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'dashboard.log'),
-            'formatter': 'verbose',
-        },
-        'api_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'logs' / 'api.log'),
             'formatter': 'verbose',
         },
     },
+
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+
     'loggers': {
         'django': {
-            'handlers': ['console', 'root_file'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
         'django.request': {
-            'handlers': ['console', 'error_file'],
+            'handlers': ['console'],
             'level': 'ERROR',
             'propagate': False,
         },
-        'authentication': {
-            'handlers': ['console', 'authentication_file'],
+        'api': {  # si tu avais un logger custom
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
-        'users': {
-            'handlers': ['console', 'users_file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'products': {
-            'handlers': ['console', 'products_file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'tours': {
-            'handlers': ['console', 'tours_file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'deliveries': {
-            'handlers': ['console', 'deliveries_file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'orders': {
-            'handlers': ['console', 'orders_file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'tracking': {
-            'handlers': ['console', 'tracking_file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'dashboard': {
-            'handlers': ['console', 'dashboard_file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'api': {
-            'handlers': ['console', 'api_file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
-    'root': {
-        'handlers': ['console', 'root_file'],
-        'level': 'INFO',
-    },
+    }
 }
+
 
 # Application definition
 INSTALLED_APPS = [
