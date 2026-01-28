@@ -7,3 +7,4 @@ Pillow
 drf-yasg
 python-dotenv
 django-cors-headers
+gunicorn
