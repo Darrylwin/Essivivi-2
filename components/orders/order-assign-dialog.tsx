@@ -247,15 +247,6 @@ export function OrderAssignDialog({
               )}
             </div>
           )}
-          
-          {availableAgents && (
-            <Alert>
-              <AlertCircleIcon className="h-4 w-4" />
-              <AlertDescription>
-                {availableAgents.note}
-              </AlertDescription>
-            </Alert>
-          )}
         </div>
         
         <DialogFooter>
