@@ -361,36 +361,36 @@ class ProfileTab extends StatelessWidget {
                                       ],
                                     ),
                                   ),
-                                  if (user.telephone != null) ...[
-                                    const SizedBox(width: 12),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColor.background,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          const Icon(
-                                            Icons.phone_rounded,
-                                            size: 16,
+                                  ...[
+                                  const SizedBox(width: 12),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColor.background,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.phone_rounded,
+                                          size: 16,
+                                          color: AppColor.textSecondary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          user.telephone,
+                                          style: const TextStyle(
+                                            fontSize: 13,
                                             color: AppColor.textSecondary,
                                           ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            user.telephone!,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              color: AppColor.textSecondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
+                                ],
                                 ],
                               ),
                             ],
@@ -455,42 +455,6 @@ class ProfileTab extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
-                              );
-                            },
-                          ),
-                          _buildMenuItem(
-                            context,
-                            icon: Icons.info_outline_rounded,
-                            title: 'À propos',
-                            subtitle: 'Version 1.0.0',
-                            onTap: () {
-                              showAboutDialog(
-                                context: context,
-                                applicationName: 'ESSIVIVI',
-                                applicationVersion: '1.0.0',
-                                applicationIcon: Container(
-                                  width: 60,
-                                  height: 60,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: AppColor.primaryGradient,
-                                  ),
-                                  child: const Icon(
-                                    Icons.water_drop_rounded,
-                                    size: 30,
-                                    color: AppColor.white,
-                                  ),
-                                ),
-                                children: [
-                                  const SizedBox(height: 16),
-                                  const Text(
-                                    'Livraison d\'eau à domicile',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      color: AppColor.textSecondary,
-                                    ),
-                                  ),
-                                ],
                               );
                             },
                           ),
